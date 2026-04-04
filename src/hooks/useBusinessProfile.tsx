@@ -30,7 +30,7 @@ export function useBusinessProfile() {
         .from("business_profiles")
         .select("*")
         .eq("user_id", user.id)
-        .maybeSingle();
+        .maybeSingle() as { data: { id: string } | null };
       return data as BusinessProfile | null;
     },
     enabled: !!user,
