@@ -12,6 +12,7 @@ import {
 import DashboardLayout from "@/components/DashboardLayout";
 import ChatMessage from "@/components/ChatMessage";
 import { supabase } from "@/integrations/supabase/client";
+import { getFunctionsBaseUrl } from "@/lib/apiBase";
 import { useCredits } from "@/hooks/useCredits";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -93,7 +94,7 @@ export default function LogoGeneratorPage() {
       }));
 
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/logo-generator`,
+        `${getFunctionsBaseUrl()}/functions/v1/logo-generator`,
         {
           method: "POST",
           headers: {

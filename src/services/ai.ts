@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getFunctionsBaseUrl } from "@/lib/apiBase";
 
 async function getAuthToken(): Promise<string | null> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -6,7 +7,7 @@ async function getAuthToken(): Promise<string | null> {
 }
 
 function getBaseUrl(): string {
-  return import.meta.env.VITE_SUPABASE_URL as string;
+  return getFunctionsBaseUrl();
 }
 
 export interface GeneratePostsPayload {

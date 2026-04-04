@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Zap, Sparkles, Crown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { getFunctionsBaseUrl } from "@/lib/apiBase";
 import { useState } from "react";
 
 interface BuyCreditsDialogProps {
@@ -58,7 +59,7 @@ export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialo
       const token = session?.access_token;
 
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/buy-credits`,
+        `${getFunctionsBaseUrl()}/functions/v1/buy-credits`,
         {
           method: "POST",
           headers: {

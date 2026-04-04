@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBusinessProfile } from "@/hooks/useBusinessProfile";
 import { buildRagContext } from "@/lib/rag";
+import { getFunctionsBaseUrl } from "@/lib/apiBase";
 import { toast } from "sonner";
 
 interface Message {
@@ -100,7 +101,7 @@ export default function ChatPage() {
       }));
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`,
+        `${getFunctionsBaseUrl()}/functions/v1/ai-chat`,
         {
           method: "POST",
           headers: {

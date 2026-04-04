@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: infusion-ia-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false

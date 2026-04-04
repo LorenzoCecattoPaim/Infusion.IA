@@ -34,6 +34,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       business_profiles: {
         Row: {
@@ -87,6 +88,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       business_materials: {
         Row: {
@@ -116,6 +118,7 @@ export interface Database {
           mime_type?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       generated_images: {
         Row: {
@@ -148,6 +151,7 @@ export interface Database {
           quality?: string;
           created_at?: string;
         };
+        Relationships: [];
       };
       payment_orders: {
         Row: {
@@ -186,6 +190,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       rate_limits: {
         Row: {
@@ -209,10 +214,12 @@ export interface Database {
           count?: number;
           window_start?: string;
         };
+        Relationships: [];
       };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
     Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 }

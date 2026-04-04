@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import DashboardLayout from "@/components/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
+import { getFunctionsBaseUrl } from "@/lib/apiBase";
 import { useCredits } from "@/hooks/useCredits";
 import { useGeneratedImages, type GeneratedImage } from "@/hooks/useGeneratedImages";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
@@ -67,7 +68,7 @@ export default function ImageGeneratorPage() {
       const token = session?.access_token;
 
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-image`,
+        `${getFunctionsBaseUrl()}/functions/v1/generate-image`,
         {
           method: "POST",
           headers: {
