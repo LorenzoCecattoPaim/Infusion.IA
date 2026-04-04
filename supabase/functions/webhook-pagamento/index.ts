@@ -1,85 +1,83 @@
-// supabase/functions/webhook-pagamento/index.ts
-// Recebe webhooks do Pagar.me e InfinitePay
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/agents.ts";
-import { log } from "../_shared/monitoring.ts";
-
-const PAGARME_WEBHOOK_SECRET = Deno.env.get("PAGARME_WEBHOOK_SECRET") || "";
+import { corsHeaders, errorResponse } from "../_shared/agents.ts";
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  try {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
 
-  const body = await req.text();
-  const payload = JSON.parse(body);
+    const body = await req.json();
+    console.log("Webhook recebido:", JSON.stringify(body));
 
-  log({ function: "webhook-pagamento", action: "received", status: "ok", meta: { type: payload.type, id: payload.id } });
+    // Pagar.me webhook format
+    const eventType = body.type || body.event;
 
-  // ── Pagar.me events ───────────────────────────────────────
-  if (payload.type === "order.paid" || payload.type === "charge.paid") {
-    const orderId = payload.data?.id;
-    const metadata = payload.data?.metadata || {};
+    if (
+      eventType === "order.paid" ||
+      eventType === "charge.paid" ||
+      body.status === "paid"
+    ) {
+      const metadata = body.data?.metadata || body.metadata || {};
+      const { order_id, user_id, credits } = metadata;
 
-    const { data: tx } = await supabase
-      .from("transactions")
-      .select("*")
-      .eq("gateway_tx_id", orderId)
-      .single();
+      if (!order_id || !user_id || !credits) {
+        console.error("Webhook: metadata incompleto", metadata);
+        return new Response("OK", { status: 200 });
+      }
 
-    if (tx && tx.status !== "paid") {
-      // Atualiza transação
+      // Check if already processed
+      const { data: order } = await supabase
+        .from("payment_orders")
+        .select("status")
+        .eq("id", order_id)
+        .single();
+
+      if (order?.status === "paid") {
+        return new Response("OK", { status: 200 });
+      }
+
+      // Update order status
       await supabase
-        .from("transactions")
-        .update({ status: "paid", gateway_payload: payload.data })
-        .eq("id", tx.id);
+        .from("payment_orders")
+        .update({ status: "paid", updated_at: new Date().toISOString() })
+        .eq("id", order_id);
 
-      // Adiciona créditos
-      if (tx.credits_granted > 0) {
-        await supabase.rpc("add_credits", {
-          p_user_id: tx.user_id,
-          p_amount: tx.credits_granted,
-          p_reason: "purchase",
-          p_ref_id: tx.id,
-          p_desc: tx.description,
-        });
-        log({ function: "webhook-pagamento", action: "credits_granted", status: "ok", meta: { user_id: tx.user_id, credits: tx.credits_granted } });
-      }
+      // Add credits to user
+      const { data: currentCredits } = await supabase
+        .from("user_credits")
+        .select("credits")
+        .eq("user_id", user_id)
+        .single();
 
-      // Se é assinatura, atualiza status
-      if (tx.subscription_id) {
+      if (currentCredits) {
         await supabase
-          .from("subscriptions")
+          .from("user_credits")
           .update({
-            status: "active",
-            current_period_start: new Date().toISOString(),
-            current_period_end: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
+            credits: currentCredits.credits + Number(credits),
+            updated_at: new Date().toISOString(),
           })
-          .eq("id", tx.subscription_id);
+          .eq("user_id", user_id);
       }
+
+      console.log(
+        `Créditos adicionados: user=${user_id}, credits=${credits}, order=${order_id}`
+      );
     }
-  }
 
-  if (payload.type === "charge.payment_failed" || payload.type === "order.payment_failed") {
-    const orderId = payload.data?.id;
-    await supabase
-      .from("transactions")
-      .update({ status: "failed", gateway_payload: payload.data })
-      .eq("gateway_tx_id", orderId);
+    return new Response("OK", {
+      status: 200,
+      headers: corsHeaders,
+    });
+  } catch (err) {
+    console.error("webhook-pagamento error:", err);
+    // Always return 200 to prevent gateway retries on our bugs
+    return new Response("OK", { status: 200 });
   }
-
-  if (payload.type === "subscription.canceled") {
-    await supabase
-      .from("subscriptions")
-      .update({ status: "canceled", canceled_at: new Date().toISOString() })
-      .eq("gateway_sub_id", payload.data?.id);
-  }
-
-  return new Response(JSON.stringify({ received: true }), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
 });

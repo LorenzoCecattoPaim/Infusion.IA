@@ -1,188 +1,249 @@
-// supabase/functions/generate-image/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   AGENTE_4_OTIMIZADOR_PROMPT,
-  AGENTE_5_VALIDADOR,
   callAgent,
   validateWithAgent,
   safeParseJSON,
   corsHeaders,
+  errorResponse,
 } from "../_shared/agents.ts";
-import { log, timer } from "../_shared/monitoring.ts";
+import { log, logError } from "../_shared/monitoring.ts";
 
-const LEONARDO_API_KEY = Deno.env.get("LEONARDO_API_KEY") || "";
-const LEONARDO_BASE = "https://cloud.leonardo.ai/api/rest/v1";
+const LEONARDO_API_KEY = () => Deno.env.get("LEONARDO_API_KEY") || "";
 
-// Modelos Leonardo
-const MODELS = {
-  premium: "b24e16ff-06e3-43eb-8d33-4416c2d75876", // Leonardo Diffusion XL
+// Leonardo AI model IDs
+const LEONARDO_MODELS = {
   standard: "6bef9f1b-29cb-40c7-b9df-32b51c1f67d3", // Leonardo Creative
+  premium: "b24e16ff-06e3-43eb-8d33-4416c2d75876", // Leonardo Diffusion XL
 };
 
 async function generateWithLeonardo(
   prompt: string,
   negativePrompt: string,
-  quality: string,
+  quality: "standard" | "premium"
 ): Promise<string> {
-  const modelId = quality === "premium" ? MODELS.premium : MODELS.standard;
+  const apiKey = LEONARDO_API_KEY();
+  if (!apiKey) throw new Error("LEONARDO_API_KEY não configurado.");
 
-  const initRes = await fetch(`${LEONARDO_BASE}/generations`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${LEONARDO_API_KEY}`,
-    },
-    body: JSON.stringify({
-      prompt,
-      negative_prompt: negativePrompt,
-      modelId,
-      num_images: 1,
-      width: 1024,
-      height: 1024,
-      num_inference_steps: quality === "premium" ? 40 : 25,
-      guidance_scale: 7,
-      public: false,
-    }),
-  });
+  const body = {
+    prompt,
+    negative_prompt: negativePrompt,
+    modelId: LEONARDO_MODELS[quality],
+    num_images: 1,
+    width: 1024,
+    height: 1024,
+    num_inference_steps: quality === "premium" ? 40 : 25,
+    guidance_scale: 7,
+    public: false,
+  };
 
-  if (!initRes.ok) throw new Error(`Leonardo init error: ${initRes.status}`);
+  const initRes = await fetch(
+    "https://cloud.leonardo.ai/api/rest/v1/generations",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  if (!initRes.ok) {
+    const err = await initRes.text();
+    throw new Error(`Leonardo API error ${initRes.status}: ${err}`);
+  }
 
   const initData = await initRes.json();
   const generationId = initData.sdGenerationJob?.generationId;
   if (!generationId) throw new Error("Leonardo: falha ao iniciar geração");
 
-  // Poll por até 60 segundos
+  // Poll for completion
   for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 2000));
-    const pollRes = await fetch(`${LEONARDO_BASE}/generations/${generationId}`, {
-      headers: { Authorization: `Bearer ${LEONARDO_API_KEY}` },
-    });
+
+    const pollRes = await fetch(
+      `https://cloud.leonardo.ai/api/rest/v1/generations/${generationId}`,
+      {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      }
+    );
+
+    if (!pollRes.ok) continue;
+
     const pollData = await pollRes.json();
     const gen = pollData.generations_by_pk;
-    if (gen?.status === "COMPLETE") return gen.generated_images?.[0]?.url;
-    if (gen?.status === "FAILED") throw new Error("Leonardo: geração falhou");
+
+    if (gen?.status === "COMPLETE") {
+      const url = gen.generated_images?.[0]?.url;
+      if (!url) throw new Error("Leonardo: URL da imagem não encontrada");
+      return url;
+    }
+
+    if (gen?.status === "FAILED") {
+      throw new Error("Leonardo: geração falhou");
+    }
   }
-  throw new Error("Leonardo: timeout na geração");
+
+  throw new Error("Leonardo: timeout na geração (60s)");
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
 
-  const elapsed = timer();
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const startTime = Date.now();
+  let userId = "anonymous";
 
   try {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    // Auth
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return new Response("Unauthorized", { status: 401, headers: corsHeaders });
+    if (!authHeader) return errorResponse("Unauthorized", 401);
+
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) return new Response("Unauthorized", { status: 401, headers: corsHeaders });
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+    if (authError || !user) return errorResponse("Unauthorized", 401);
+
+    userId = user.id;
 
     const { prompt, quality = "standard", template } = await req.json();
+
+    if (!prompt?.trim()) return errorResponse("prompt é obrigatório", 400);
+
     const creditCost = quality === "premium" ? 6 : 3;
 
-    // Verifica créditos
+    // Check credits
     const { data: credits } = await supabase
-      .from("user_credits").select("credits").eq("user_id", user.id).single();
+      .from("user_credits")
+      .select("credits")
+      .eq("user_id", user.id)
+      .single();
 
     if (!credits || credits.credits < creditCost) {
-      return new Response(
-        JSON.stringify({ error: "insufficient_credits" }),
-        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return errorResponse("insufficient_credits", 402);
     }
 
-    // Valida o prompt
-    const validation = await validateWithAgent(AGENTE_5_VALIDADOR, prompt);
+    // Validate prompt
+    const validation = await validateWithAgent(prompt);
     if (!validation.ok) {
-      return new Response(
-        JSON.stringify({ error: "validation_failed", motivo: validation.motivo_rejeicao }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      return errorResponse(
+        `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
+        400
       );
     }
 
-    // Otimiza o prompt com Agente 4
+    // Optimize prompt with Agent 4
     const userContent = template
-      ? `Otimize este prompt para geração de imagem. Template: ${template}. Descrição do usuário: ${prompt}`
+      ? `Otimize este prompt para geração de imagem. Template: ${template}. Descrição: ${prompt}`
       : `Otimize este prompt para geração de imagem: ${prompt}`;
 
-    let optimized: { prompt_1: string; prompt_2: string; negative_prompt: string; style_notes: string };
+    let optimized: {
+      prompt_1: string;
+      prompt_2: string;
+      negative_prompt: string;
+      style_notes: string;
+    };
 
     try {
-      const optimizedText = await callAgent({
+      const optimizedText = (await callAgent({
         systemPrompt: AGENTE_4_OTIMIZADOR_PROMPT,
         messages: [{ role: "user", content: userContent }],
         model: Deno.env.get("AI_MODEL_PROMPT_OPT") || "gpt-4o-mini",
         responseFormat: "json_object",
         maxTokens: 1024,
         temperature: 0.8,
-      }) as string;
+      })) as string;
 
       optimized = safeParseJSON(optimizedText, {
-        prompt_1: `${prompt}, professional quality, detailed, 8k`,
+        prompt_1: `${prompt}, professional quality, detailed, 8k resolution`,
         prompt_2: `${prompt}, artistic style, vibrant colors, high resolution`,
-        negative_prompt: "blurry, low quality, distorted, watermark",
+        negative_prompt:
+          "blurry, low quality, distorted, watermark, text errors, ugly",
         style_notes: "",
       });
     } catch {
       optimized = {
-        prompt_1: `${prompt}, professional quality, detailed, 8k`,
+        prompt_1: `${prompt}, professional quality, detailed, 8k resolution`,
         prompt_2: `${prompt}, artistic style, vibrant colors, high resolution`,
         negative_prompt: "blurry, low quality, distorted, watermark",
-        style_notes: "",
+        style_notes: "Prompt otimizado com fallback",
       };
     }
 
-    log({ function: "generate-image", user_id: user.id, action: "generating", status: "ok", meta: { quality } });
-
-    // Gera 2 variações em paralelo
+    // Generate 2 variations concurrently
     const [url1, url2] = await Promise.all([
-      generateWithLeonardo(optimized.prompt_1, optimized.negative_prompt, quality),
-      generateWithLeonardo(optimized.prompt_2, optimized.negative_prompt, quality),
+      generateWithLeonardo(
+        optimized.prompt_1,
+        optimized.negative_prompt,
+        quality as "standard" | "premium"
+      ),
+      generateWithLeonardo(
+        optimized.prompt_2,
+        optimized.negative_prompt,
+        quality as "standard" | "premium"
+      ),
     ]);
 
-    // Deduz créditos
-    await supabase.rpc("deduct_credits", {
-      p_user_id: user.id,
-      p_amount: creditCost,
-      p_reason: "generate_image",
-      p_desc: `Geração de imagem ${quality} (2 variações)`,
-    });
+    // Deduct credits
+    await supabase
+      .from("user_credits")
+      .update({
+        credits: credits.credits - creditCost,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id);
 
-    // Salva no banco
+    // Save to DB
     const { data: savedImages } = await supabase
       .from("generated_images")
       .insert([
         {
-          user_id: user.id, url: url1, prompt,
+          user_id: user.id,
+          url: url1,
+          prompt,
           optimized_prompt: optimized.prompt_1,
           negative_prompt: optimized.negative_prompt,
-          quality, template, credits_used: creditCost,
+          quality,
         },
         {
-          user_id: user.id, url: url2, prompt,
+          user_id: user.id,
+          url: url2,
+          prompt,
           optimized_prompt: optimized.prompt_2,
           negative_prompt: optimized.negative_prompt,
-          quality, template, credits_used: 0,
+          quality,
         },
       ])
       .select();
 
-    log({ function: "generate-image", user_id: user.id, action: "complete", status: "ok", duration_ms: elapsed() });
+    log({
+      function: "generate-image",
+      user_id: userId,
+      action: "generate",
+      status: "success",
+      credits_used: creditCost,
+      duration_ms: Date.now() - startTime,
+    });
 
     return new Response(
       JSON.stringify({ images: savedImages, style_notes: optimized.style_notes }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
-    log({ function: "generate-image", action: "error", status: "error", error: String(err), duration_ms: elapsed() });
-    return new Response(
-      JSON.stringify({ error: "internal_error", detail: String(err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    logError("generate-image", userId, err);
+    return errorResponse(
+      err instanceof Error ? err.message : "Erro ao gerar imagem",
+      500
     );
   }
 });
