@@ -12,7 +12,7 @@ import MeuNegocioPage from "@/pages/MeuNegocioPage";
 import ImageGeneratorPage from "@/pages/ImageGeneratorPage";
 import LogoGeneratorPage from "@/pages/LogoGeneratorPage";
 import PostGeneratorPage from "@/pages/PostGeneratorPage";
-import BibliotecaPage from "@/pages/BibliotecaPage";
+import TextGeneratorPage from "@/pages/TextGeneratorPage";
 import ConfiguracoesPage from "@/pages/ConfiguracoesPage";
 import NotFound from "@/pages/NotFound";
 
@@ -29,10 +29,11 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider
-        defaultTheme="light"
+        defaultTheme="dark"
         storageKey="aimh-theme"
         enableSystem={false}
         disableTransitionOnChange
+        attribute="class"
       >
         <AuthProvider>
           <BrowserRouter>
@@ -87,10 +88,10 @@ export default function App() {
                 }
               />
               <Route
-                path="/biblioteca"
+                path="/gerador-texto"
                 element={
                   <ProtectedRoute>
-                    <BibliotecaPage />
+                    <TextGeneratorPage />
                   </ProtectedRoute>
                 }
               />

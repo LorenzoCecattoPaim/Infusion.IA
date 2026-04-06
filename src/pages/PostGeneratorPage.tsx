@@ -1,63 +1,147 @@
-import { useState } from "react";
-import { FileText, Sparkles, Copy } from "lucide-react";
+﻿import { useEffect, useRef, useState } from "react";
+import {
+  Image as ImageIcon,
+  Sparkles,
+  Upload,
+  Download,
+  Copy,
+  Loader2,
+  Edit3,
+  RefreshCw,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import DashboardLayout from "@/components/DashboardLayout";
+import { generateImage, generatePostPrompt } from "@/services/ai";
 import { useCredits } from "@/hooks/useCredits";
-import { generatePosts, type GeneratedPost } from "@/services/ai";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import type { GeneratedImage } from "@/hooks/useGeneratedImages";
 
-const CANAIS = ["Instagram", "TikTok", "YouTube", "LinkedIn", "Site próprio", "WhatsApp"];
-const OBJETIVOS = [
-  "Vender mais",
-  "Gerar leads",
-  "Aumentar reconhecimento de marca",
-  "Melhorar autoridade",
-  "Lançar um produto",
+const TIPOS = ["Produto", "Promocional", "Institucional", "Datas comemorativas"];
+const FORMATOS = [
+  { value: "youtube_thumbnail", label: "Thumbnail YouTube", ratio: "16:9" },
+  { value: "youtube_banner", label: "Banner YouTube", ratio: "16:9" },
+  { value: "instagram_1x1", label: "Instagram 1:1", ratio: "1:1" },
+  { value: "stories_16x9", label: "Post 16:9 Stories", ratio: "16:9" },
 ];
-const TIPOS = [
-  "Posts para redes sociais",
-  "Anúncios (ads)",
-  "Textos para site",
-  "E-mails de marketing",
-  "Roteiros de vídeo",
-  "Imagens com IA",
-];
+const ESTILOS = ["Clean", "Moderno", "Luxuoso", "Minimalista", "Colorido"];
+
+interface HistoryImage {
+  id: string;
+  url: string;
+  prompt: string;
+  createdAt: string;
+}
 
 export default function PostGeneratorPage() {
   const { credits } = useCredits();
-  const [canal, setCanal] = useState("Instagram");
-  const [objetivo, setObjetivo] = useState(OBJETIVOS[0]);
-  const [tipoConteudo, setTipoConteudo] = useState(TIPOS[0]);
-  const [brief, setBrief] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [posts, setPosts] = useState<GeneratedPost[]>([]);
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleGenerate = async () => {
-    if (!canal || !objetivo || !tipoConteudo) {
-      toast.error("Preencha todos os campos obrigatórios.");
-      return;
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
+  const [tipoPost, setTipoPost] = useState(TIPOS[0]);
+  const [descricao, setDescricao] = useState("");
+  const [formato, setFormato] = useState(FORMATOS[2].value);
+  const [estilo, setEstilo] = useState(ESTILOS[0]);
+  const [incluirEspacoLogo, setIncluirEspacoLogo] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [images, setImages] = useState<GeneratedImage[]>([]);
+  const [lastPrompt, setLastPrompt] = useState("");
+  const [promptDraft, setPromptDraft] = useState("");
+  const [questions, setQuestions] = useState<string[]>([]);
+  const [history, setHistory] = useState<HistoryImage[]>([]);
+  const [promptNotes, setPromptNotes] = useState<string | null>(null);
+
+  useEffect(() => {
+    const savedLogo = localStorage.getItem("infusion_post_logo");
+    if (savedLogo) setLogoDataUrl(savedLogo);
+  }, []);
+
+  useEffect(() => {
+    if (logoDataUrl) {
+      localStorage.setItem("infusion_post_logo", logoDataUrl);
+    } else {
+      localStorage.removeItem("infusion_post_logo");
     }
-    if (credits <= 0) {
-      toast.error("Créditos insuficientes.");
+  }, [logoDataUrl]);
+
+  const handleFile = (file?: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setLogoDataUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleGenerate = async (overridePrompt?: string) => {
+    if (!descricao.trim()) {
+      toast.error("Descreva o post que vocÃª quer gerar.");
       return;
     }
 
     setLoading(true);
+    setQuestions([]);
+
     try {
-      const data = await generatePosts({
-        canal,
-        objetivo,
-        tipo_conteudo: tipoConteudo,
-        brief,
-        channels: [canal],
+      let promptToUse = overridePrompt;
+      let observacoes: string | null = null;
+
+      if (!promptToUse) {
+        const promptResponse = await generatePostPrompt({
+          tipo_post: tipoPost,
+          descricao,
+          formato: FORMATOS.find((f) => f.value === formato)?.label || formato,
+          estilo,
+          incluir_espaco_logo: incluirEspacoLogo,
+          logo_presente: !!logoDataUrl,
+        });
+
+        if (promptResponse.perguntas?.length) {
+          setQuestions(promptResponse.perguntas);
+          toast.message("Precisamos de mais detalhes para gerar o post.");
+          setLoading(false);
+          return;
+        }
+
+        promptToUse = promptResponse.prompt;
+        observacoes = promptResponse.observacoes || null;
+      }
+
+      if (!promptToUse) {
+        toast.error("NÃ£o foi possÃ­vel gerar o prompt do post.");
+        setLoading(false);
+        return;
+      }
+
+      setLastPrompt(promptToUse);
+      setPromptDraft(promptToUse);
+      setPromptNotes(observacoes);
+
+      const result = await generateImage({
+        prompt: promptToUse,
+        quality: "standard",
+        template: "post-social",
+        format: formato,
       });
-      setPosts(data.posts || []);
+
+      setImages(result.images || []);
+      setHistory((prev) => [
+        ...(result.images || []).map((img: GeneratedImage) => ({
+          id: String(img.id || Date.now()),
+          url: img.url,
+          prompt: promptToUse || "",
+          createdAt: new Date().toISOString(),
+        })),
+        ...prev,
+      ].slice(0, 8));
+
       queryClient.invalidateQueries({ queryKey: ["credits"] });
-      queryClient.invalidateQueries({ queryKey: ["user_summary"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
       toast.success("Post gerado com sucesso.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao gerar post.");
@@ -66,89 +150,181 @@ export default function PostGeneratorPage() {
     }
   };
 
+  const handleDownload = async (url: string, id?: string | number) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `post-${id || Date.now()}.png`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch {
+      toast.error("Erro ao baixar imagem.");
+    }
+  };
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Copiado com 1 clique.");
+  };
+
   return (
     <DashboardLayout>
       <div className="p-6 max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-bold text-foreground flex items-center gap-2">
-              <FileText className="h-6 w-6 text-primary" /> Gerar posts
+              <ImageIcon className="h-6 w-6 text-primary" /> Gerador de Posts
             </h1>
             <p className="text-muted-foreground mt-1">
-              Gere posts prontos com base no contexto do seu negócio.
+              Crie imagens para produtos, campanhas e redes sociais em poucos cliques.
             </p>
           </div>
           <div className="text-xs text-muted-foreground">
-            {credits} créditos disponíveis
+            {credits} crÃ©ditos disponÃ­veis
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="bg-card border-border shadow-card">
             <CardHeader className="border-b border-border">
-              <CardTitle className="font-display text-foreground">Briefing rápido</CardTitle>
+              <CardTitle className="font-display text-foreground">Briefing do post</CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Canal</label>
-                <Select value={canal} onValueChange={setCanal}>
-                  <SelectTrigger className="bg-secondary border-border">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CANAIS.map((item) => (
-                      <SelectItem key={item} value={item}>{item}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <label className="text-sm font-medium text-foreground">Upload de logo</label>
+                <div
+                  className="border border-dashed border-border rounded-2xl p-4 bg-secondary/40 text-center cursor-pointer hover:border-primary/40 transition-colors"
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleFile(e.dataTransfer.files?.[0]);
+                  }}
+                >
+                  {logoDataUrl ? (
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={logoDataUrl}
+                        alt="Logo"
+                        className="h-12 w-12 rounded-lg object-contain bg-background"
+                      />
+                      <div className="text-left">
+                        <p className="text-sm text-foreground font-medium">Logo carregada</p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLogoDataUrl(null);
+                          }}
+                        >
+                          Remover
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Upload className="h-5 w-5 text-muted-foreground mx-auto" />
+                      <p className="text-sm text-muted-foreground">
+                        Arraste e solte ou clique para enviar
+                      </p>
+                    </div>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleFile(e.target.files?.[0])}
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Objetivo</label>
-                <Select value={objetivo} onValueChange={setObjetivo}>
-                  <SelectTrigger className="bg-secondary border-border">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {OBJETIVOS.map((item) => (
-                      <SelectItem key={item} value={item}>{item}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Tipo de conteúdo</label>
-                <Select value={tipoConteudo} onValueChange={setTipoConteudo}>
+                <label className="text-sm font-medium text-foreground">Tipo de post</label>
+                <Select value={tipoPost} onValueChange={setTipoPost}>
                   <SelectTrigger className="bg-secondary border-border">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
                     {TIPOS.map((item) => (
-                      <SelectItem key={item} value={item}>{item}</SelectItem>
+                      <SelectItem key={item} value={item}>
+                        {item}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Detalhes adicionais (opcional)</label>
-                <textarea
-                  value={brief}
-                  onChange={(e) => setBrief(e.target.value)}
-                  placeholder="Ex.: campanha de Páscoa, foco em desconto, linguagem jovem..."
-                  className="w-full min-h-[110px] bg-secondary border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none outline-none focus:border-primary/50 transition-colors"
+                <label className="text-sm font-medium text-foreground">DescriÃ§Ã£o do post</label>
+                <Textarea
+                  value={descricao}
+                  onChange={(e) => setDescricao(e.target.value)}
+                  placeholder="Ex.: lanÃ§amento de produto com destaque para benefÃ­cios e chamada para compra"
+                  className="min-h-[120px] bg-secondary border-border"
                 />
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Formato da imagem</label>
+                  <Select value={formato} onValueChange={setFormato}>
+                    <SelectTrigger className="bg-secondary border-border">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FORMATOS.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Estilo visual</label>
+                  <Select value={estilo} onValueChange={setEstilo}>
+                    <SelectTrigger className="bg-secondary border-border">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ESTILOS.map((item) => (
+                        <SelectItem key={item} value={item}>
+                          {item}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="espaco-logo"
+                  checked={incluirEspacoLogo}
+                  onCheckedChange={(val) => setIncluirEspacoLogo(Boolean(val))}
+                />
+                <label htmlFor="espaco-logo" className="text-sm text-foreground">
+                  Incluir espaÃ§o para logotipo no canto inferior direito
+                </label>
+              </div>
+
               <Button
-                onClick={handleGenerate}
+                onClick={() => handleGenerate()}
                 className="w-full gradient-primary text-primary-foreground hover:opacity-90"
                 disabled={loading}
               >
-                {loading ? "Gerando..." : (
+                {loading ? (
                   <>
-                    <Sparkles className="h-4 w-4 mr-2" /> Gerar post
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 mr-2" /> Gerar Post
                   </>
                 )}
               </Button>
@@ -156,48 +332,111 @@ export default function PostGeneratorPage() {
           </Card>
 
           <Card className="bg-card border-border shadow-card">
-            <CardHeader className="border-b border-border">
-              <CardTitle className="font-display text-foreground">Resultado</CardTitle>
+            <CardHeader className="border-b border-border flex flex-row items-center justify-between">
+              <CardTitle className="font-display text-foreground">Preview do post</CardTitle>
+              {lastPrompt && (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => handleCopy(lastPrompt)}>
+                    <Copy className="h-3.5 w-3.5 mr-1.5" /> Copiar
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleGenerate(lastPrompt)} disabled={loading}>
+                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Gerar variaÃ§Ã£o
+                  </Button>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="p-6 space-y-4">
-              {posts.length === 0 ? (
+              {questions.length > 0 && (
+                <div className="border border-border rounded-xl p-4 bg-secondary/20">
+                  <p className="text-xs text-muted-foreground mb-2">Precisamos de mais detalhes:</p>
+                  <ul className="space-y-1 text-sm text-foreground">
+                    {questions.map((q, idx) => (
+                      <li key={`${q}-${idx}`}>- {q}</li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Responda ajustando a descriÃ§Ã£o e gere novamente.
+                  </p>
+                </div>
+              )}
+
+              {images.length === 0 ? (
                 <div className="text-sm text-muted-foreground">
-                  Preencha o briefing para gerar o post.
+                  Preencha o briefing para gerar a imagem do seu post.
                 </div>
               ) : (
-                posts.map((post, idx) => (
-                  <div key={idx} className="border border-border rounded-xl p-4 bg-secondary/20 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-semibold text-muted-foreground">{post.canal}</div>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {images.map((img) => (
+                      <div key={img.id} className="rounded-2xl overflow-hidden border border-border">
+                        <img
+                          src={img.url}
+                          alt="Post gerado"
+                          className="w-full object-cover"
+                        />
+                        <div className="p-3 bg-card flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">VariaÃ§Ã£o</span>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleDownload(img.url, img.id)}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {lastPrompt && (
+                    <div className="border border-border rounded-xl p-4 bg-secondary/20 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">Prompt usado</p>
+                        <Button size="sm" variant="outline" onClick={() => setPromptDraft(lastPrompt)}>
+                          <Edit3 className="h-3.5 w-3.5 mr-1.5" /> Editar prompt
+                        </Button>
+                      </div>
+                      <Textarea
+                        value={promptDraft}
+                        onChange={(e) => setPromptDraft(e.target.value)}
+                        className="min-h-[110px] bg-background border-border"
+                      />
                       <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => {
-                          navigator.clipboard.writeText(post.texto_pronto || "");
-                          toast.success("Texto copiado.");
-                        }}
+                        onClick={() => handleGenerate(promptDraft)}
+                        className="gradient-primary text-primary-foreground hover:opacity-90"
+                        disabled={loading || !promptDraft.trim()}
                       >
-                        <Copy className="h-4 w-4" />
+                        Gerar com prompt editado
                       </Button>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Texto pronto</p>
-                      <p className="text-sm text-foreground whitespace-pre-line">{post.texto_pronto}</p>
+                  )}
+
+                  {promptNotes && (
+                    <div className="border border-border rounded-xl p-4 bg-secondary/20">
+                      <p className="text-xs text-muted-foreground mb-2">Notas do agente</p>
+                      <p className="text-sm text-foreground">{promptNotes}</p>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">CTA</p>
-                      <p className="text-sm text-foreground">{post.cta}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Sugestão visual</p>
-                      <p className="text-sm text-foreground">{post.sugestao_visual}</p>
-                    </div>
-                  </div>
-                ))
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>
         </div>
+
+        {history.length > 0 && (
+          <Card className="bg-card border-border shadow-card">
+            <CardHeader className="border-b border-border">
+              <CardTitle className="font-display text-foreground">HistÃ³rico de geraÃ§Ãµes</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+              {history.map((item) => (
+                <div key={item.id} className="rounded-xl overflow-hidden border border-border">
+                  <img src={item.url} alt="HistÃ³rico" className="w-full object-cover" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </DashboardLayout>
   );

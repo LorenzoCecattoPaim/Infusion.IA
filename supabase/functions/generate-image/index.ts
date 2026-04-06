@@ -21,7 +21,9 @@ const LEONARDO_MODELS = {
 async function generateWithLeonardo(
   prompt: string,
   negativePrompt: string,
-  quality: "standard" | "premium"
+  quality: "standard" | "premium",
+  width: number,
+  height: number
 ): Promise<string> {
   const apiKey = LEONARDO_API_KEY();
   if (!apiKey) throw new Error("LEONARDO_API_KEY não configurado.");
@@ -31,8 +33,8 @@ async function generateWithLeonardo(
     negative_prompt: negativePrompt,
     modelId: LEONARDO_MODELS[quality],
     num_images: 1,
-    width: 1024,
-    height: 1024,
+    width,
+    height,
     num_inference_steps: quality === "premium" ? 40 : 25,
     guidance_scale: 7,
     public: false,
@@ -116,11 +118,20 @@ serve(async (req) => {
 
     userId = user.id;
 
-    const { prompt, quality = "standard", template } = await req.json();
+    const { prompt, quality = "standard", template, format } = await req.json();
 
     if (!prompt?.trim()) return errorResponse("prompt é obrigatório", 400);
 
     const creditCost = quality === "premium" ? 10 : 5;
+
+    const formatMap: Record<string, { width: number; height: number }> = {
+      youtube_thumbnail: { width: 1024, height: 576 },
+      youtube_banner: { width: 1024, height: 576 },
+      instagram_1x1: { width: 1024, height: 1024 },
+      stories_16x9: { width: 1024, height: 576 },
+    };
+
+    const size = formatMap[format as string] || { width: 1024, height: 1024 };
 
     // Check credits
     const { data: credits } = await supabase
@@ -185,12 +196,16 @@ serve(async (req) => {
       generateWithLeonardo(
         optimized.prompt_1,
         optimized.negative_prompt,
-        quality as "standard" | "premium"
+        quality as "standard" | "premium",
+        size.width,
+        size.height
       ),
       generateWithLeonardo(
         optimized.prompt_2,
         optimized.negative_prompt,
-        quality as "standard" | "premium"
+        quality as "standard" | "premium",
+        size.width,
+        size.height
       ),
     ]);
 

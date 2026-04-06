@@ -1,4 +1,4 @@
-import {
+﻿import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -16,7 +16,6 @@ import {
   FileText,
   Image,
   Sparkles,
-  BookOpen,
   Settings,
   LogOut,
   Zap,
@@ -32,10 +31,10 @@ const NAV_ITEMS = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/chat", icon: MessageSquare, label: "Consultor de Marketing IA" },
   { to: "/meu-negocio", icon: Briefcase, label: "Meu Negócio" },
-  { to: "/gerar-posts", icon: FileText, label: "Gerar Posts" },
-  { to: "/gerador", icon: Image, label: "Gerar imagem" },
+  { to: "/gerador-texto", icon: FileText, label: "Gerador de Texto" },
+  { to: "/gerar-posts", icon: Image, label: "Gerador de Posts" },
+  { to: "/gerador", icon: Image, label: "Gerador de Imagens" },
   { to: "/logo-generator", icon: Sparkles, label: "Criar logo" },
-  { to: "/biblioteca", icon: BookOpen, label: "Biblioteca" },
   { to: "/configuracoes", icon: Settings, label: "Configurações" },
 ];
 
@@ -51,9 +50,11 @@ export default function AppSidebar() {
       <Sidebar className="border-r border-sidebar-border bg-sidebar">
         <SidebarHeader className="p-4 border-b border-sidebar-border">
           <div className="flex items-center gap-3">
-            <div className="gradient-primary rounded-xl p-2 shrink-0">
-              <Sparkles className="h-5 w-5 text-primary-foreground" />
-            </div>
+            <img
+              src="/favicon.png"
+              alt="Infusion.IA"
+              className="h-7 w-7 rounded-lg object-contain"
+            />
             {!collapsed && (
               <div>
                 <p className="font-display font-bold text-sidebar-foreground text-sm">Infusion.IA</p>
@@ -93,8 +94,8 @@ export default function AppSidebar() {
               }`}
             >
               <Zap className="h-3.5 w-3.5 shrink-0" />
-              <span>{credits} créditos</span>
-              <span className="ml-auto text-[10px] opacity-70">+ Comprar créditos</span>
+              <span>{credits} crÃ©ditos</span>
+              <span className="ml-auto text-[10px] opacity-70">Ver planos</span>
             </button>
           )}
 
@@ -134,4 +135,6 @@ export default function AppSidebar() {
     </>
   );
 }
+
+
 

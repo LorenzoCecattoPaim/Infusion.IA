@@ -94,7 +94,7 @@ export default function ImageGeneratorPage() {
       }
       queryClient.invalidateQueries({ queryKey: ["credits"] });
       queryClient.invalidateQueries({ queryKey: ["generated_images"] });
-      queryClient.invalidateQueries({ queryKey: ["user_summary"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
       toast.success("Imagens geradas! Escolha sua favorita.");
     },
     onError: (err: Error) => {

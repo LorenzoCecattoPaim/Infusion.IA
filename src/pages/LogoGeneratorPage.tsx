@@ -131,7 +131,7 @@ export default function LogoGeneratorPage() {
       }
 
       queryClient.invalidateQueries({ queryKey: ["credits"] });
-      queryClient.invalidateQueries({ queryKey: ["user_summary"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro de conexão.");
     } finally {
@@ -173,7 +173,7 @@ export default function LogoGeneratorPage() {
         setStage(2);
       }
       queryClient.invalidateQueries({ queryKey: ["credits"] });
-      queryClient.invalidateQueries({ queryKey: ["user_summary"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao gerar logos.");
     } finally {
@@ -216,7 +216,7 @@ export default function LogoGeneratorPage() {
         setStage(3);
       }
       queryClient.invalidateQueries({ queryKey: ["credits"] });
-      queryClient.invalidateQueries({ queryKey: ["user_summary"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao gerar variações.");
     } finally {

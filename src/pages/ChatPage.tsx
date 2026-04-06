@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 import { Send, Sparkles, TrendingUp, Target, Calendar, BarChart2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,19 +27,19 @@ interface ConversationSummary {
 
 const suggestions = [
   {
-    text: "Crie um plano de marketing para o meu negócio",
-    icon: TrendingUp,
-  },
-  {
-    text: "Quais são as melhores estratégias para redes sociais?",
-    icon: Target,
-  },
-  {
-    text: "Monte um calendário de conteúdo para o próximo mês",
+    text: "Crie um cronograma de postagens para 15 dias",
     icon: Calendar,
   },
   {
-    text: "Como analisar o desempenho das minhas campanhas?",
+    text: "Sugira campanhas para as próximas datas comemorativas",
+    icon: TrendingUp,
+  },
+  {
+    text: "Quais são os melhores horários e formatos de postagem?",
+    icon: Target,
+  },
+  {
+    text: "Traga insights com base em referências de mercado",
     icon: BarChart2,
   },
 ];
@@ -47,17 +47,17 @@ const suggestions = [
 const insights = [
   {
     title: "Engajamento no Instagram",
-    description: "Posts com perguntas geram 2x mais comentários",
+    description: "Posts com perguntas geram 2x mais comentÃ¡rios",
     icon: TrendingUp,
   },
   {
-    title: "Melhor horário para postar",
-    description: "Entre 18h e 21h para maior alcance orgânico",
+    title: "Melhor horÃ¡rio para postar",
+    description: "Entre 18h e 21h para maior alcance orgÃ¢nico",
     icon: Calendar,
   },
   {
-    title: "Tendência de conteúdo",
-    description: "Vídeos curtos têm 3x mais alcance que fotos",
+    title: "TendÃªncia de conteÃºdo",
+    description: "VÃ­deos curtos tÃªm 3x mais alcance que fotos",
     icon: BarChart2,
   },
   {
@@ -207,7 +207,7 @@ export default function ChatPage() {
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         if (response.status === 402) {
-          toast.error("Créditos insuficientes. Compre mais créditos para continuar.");
+          toast.error("CrÃ©ditos insuficientes. Compre mais crÃ©ditos para continuar.");
         } else {
           toast.error(err.error || "Erro ao processar sua mensagem.");
         }
@@ -262,7 +262,7 @@ export default function ChatPage() {
         await fetchHistory();
       }
     } catch (err) {
-      toast.error("Erro de conexão. Verifique sua internet e tente novamente.");
+      toast.error("Erro de conexÃ£o. Verifique sua internet e tente novamente.");
     } finally {
       setIsLoading(false);
       queryClient.invalidateQueries({ queryKey: ["credits"] });
@@ -302,7 +302,7 @@ export default function ChatPage() {
             <div className="max-w-4xl mx-auto">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5 text-primary" />
-                Últimos insights
+                Ãšltimos insights
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {insights.map((insight) => (
@@ -333,14 +333,14 @@ export default function ChatPage() {
                 <Sparkles className="h-8 w-8 text-primary-foreground" />
               </div>
               <h2 className="font-display text-2xl font-bold text-foreground mb-2">
-                Consultor de Marketing com IA
+                Especialista de Marketing com IA
               </h2>
               <p className="text-muted-foreground mb-2 max-w-md">
-                Seu consultor especializado em pequenas e médias empresas brasileiras.
+                Seu especialista em marketing para pequenas e médias empresas brasileiras.
               </p>
               {businessProfile?.nome_empresa && (
                 <p className="text-xs text-primary mb-8">
-                  Contexto ativo: {businessProfile.nome_empresa} — perfil carregado
+                  Contexto ativo: {businessProfile.nome_empresa} â€” perfil carregado
                 </p>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
@@ -401,7 +401,7 @@ export default function ChatPage() {
                     handleSend();
                   }
                 }}
-                placeholder="Pergunte sobre estratégias de marketing, criação de conteúdo..."
+                placeholder="Pergunte sobre estratÃ©gias de marketing, criaÃ§Ã£o de conteÃºdo..."
                 className="flex-1 bg-transparent resize-none text-foreground placeholder:text-muted-foreground text-sm outline-none min-h-[40px] max-h-[120px] py-2 px-1"
                 rows={1}
                 disabled={isLoading}
@@ -416,7 +416,7 @@ export default function ChatPage() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Consultor de Marketing com IA • Powered by Infusion.IA • 1 crédito por mensagem
+              Especialista de Marketing com IA â€¢ Powered by Infusion.IA â€¢ 1 crÃ©dito por mensagem
             </p>
           </div>
         </div>
@@ -424,5 +424,9 @@ export default function ChatPage() {
     </DashboardLayout>
   );
 }
+
+
+
+
 
 

@@ -26,7 +26,7 @@ export default function CreditsDisplay() {
           variant="ghost"
           className="h-7 w-7 text-muted-foreground hover:text-primary"
           onClick={() => setOpen(true)}
-          title="Comprar créditos"
+          title="Ver planos"
         >
           <Plus className="h-3.5 w-3.5" />
         </Button>

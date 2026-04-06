@@ -7,10 +7,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Zap, Sparkles, Crown } from "lucide-react";
-import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { getFunctionsBaseUrl } from "@/lib/apiBase";
-import { useState } from "react";
 
 interface BuyCreditsDialogProps {
   open: boolean;
@@ -25,7 +21,7 @@ const PLANS = [
     price: "R$ 19,90",
     icon: Zap,
     highlight: false,
-    description: "Ideal para comeÃ§ar",
+    description: "Ideal para começar",
   },
   {
     id: "pro",
@@ -43,55 +39,24 @@ const PLANS = [
     price: "R$ 129,90",
     icon: Crown,
     highlight: false,
-    description: "Para times e agÃªncias",
+    description: "Para times e agências",
   },
 ];
 
 const PLANOS_URL = "https://infusionai-hub.lovable.app/#planos";
 
 export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialogProps) {
-  const [loading, setLoading] = useState<string | null>(null);
-
-  const handleBuy = async (planId: string) => {
-    setLoading(planId);
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
-      const res = await fetch(
-        `${getFunctionsBaseUrl()}/functions/v1/buy-credits`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json; charset=UTF-8",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ plan: planId }),
-        }
-      );
-      const data = await res.json();
-      if (data.payment_url) {
-        window.open(data.payment_url, "_blank");
-        onOpenChange(false);
-      } else {
-        toast.error(data.error || "NÃ£o foi possÃ­vel iniciar o pagamento.");
-      }
-    } catch {
-      toast.error("NÃ£o foi possÃ­vel conectar ao servidor de pagamentos.");
-    } finally {
-      setLoading(null);
-    }
+  const handleOpenPlans = () => {
+    window.location.href = PLANOS_URL;
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="font-display text-foreground">Comprar crÃ©ditos</DialogTitle>
+          <DialogTitle className="font-display text-foreground">Ver planos</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Escolha o pacote ideal para o seu negÃ³cio
+            Compare os planos e escolha o ideal para o seu negócio
           </DialogDescription>
         </DialogHeader>
 
@@ -116,7 +81,9 @@ export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialo
                 </div>
                 <div>
                   <p className="font-semibold text-foreground text-sm">{plan.label}</p>
-                  <p className="text-xs text-muted-foreground">{plan.credits} crÃ©ditos â€¢ {plan.description}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {plan.credits} créditos • {plan.description}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -124,10 +91,9 @@ export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialo
                 <Button
                   size="sm"
                   className="gradient-primary text-primary-foreground hover:opacity-90"
-                  onClick={() => handleBuy(plan.id)}
-                  disabled={loading === plan.id}
+                  onClick={handleOpenPlans}
                 >
-                  {loading === plan.id ? "..." : "Comprar"}
+                  Ver planos
                 </Button>
               </div>
             </div>
@@ -135,14 +101,12 @@ export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialo
         </div>
 
         <p className="text-xs text-muted-foreground text-center mt-2">
-          Pagamento seguro via Pagar.me â€¢ CrÃ©ditos adicionados imediatamente apÃ³s confirmaÃ§Ã£o
+          Pagamento seguro via Pagar.me • Créditos adicionados imediatamente após confirmação
         </p>
         <Button
           variant="outline"
           className="w-full mt-2"
-          onClick={() => {
-            window.location.href = PLANOS_URL;
-          }}
+          onClick={handleOpenPlans}
         >
           Ver planos completos
         </Button>
@@ -150,5 +114,3 @@ export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialo
     </Dialog>
   );
 }
-
-

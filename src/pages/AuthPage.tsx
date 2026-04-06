@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Eye, EyeOff, Lock, Mail, Sparkles } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,11 +35,11 @@ export default function AuthPage() {
         toast.success("Conta criada! Verifique seu e-mail para confirmar.");
       }
     } catch (err: any) {
-      const msg = err?.message || "Erro na autentica√ß√£o";
+      const msg = err?.message || "Erro na autenticaÁ„o";
       if (msg.includes("Invalid login credentials")) {
         toast.error("E-mail ou senha incorretos.");
       } else if (msg.includes("User already registered")) {
-        toast.error("Este e-mail j√° est√° cadastrado. Fa√ßa login.");
+        toast.error("Este e-mail j· est· cadastrado. FaÁa login.");
       } else {
         toast.error(msg);
       }
@@ -53,7 +53,7 @@ export default function AuthPage() {
       provider: "google",
       options: { redirectTo: window.location.origin },
     });
-    if (error) toast.error("N√£o foi poss√≠vel conectar com o Google.");
+    if (error) toast.error("N„o foi possÌvel conectar com o Google.");
   };
 
   return (
@@ -61,12 +61,16 @@ export default function AuthPage() {
       <div className="w-full max-w-md space-y-6">
         {/* Logo */}
         <div className="text-center">
-          <div className="gradient-primary rounded-2xl p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center shadow-glow">
-            <Sparkles className="h-8 w-8 text-primary-foreground" />
+          <div className="flex items-center justify-center gap-3">
+            <img
+              src="/favicon.png"
+              alt="Infusion.IA"
+              className="h-8 w-8 rounded-lg object-contain shadow-glow"
+            />
+            <h1 className="font-display text-2xl font-bold text-foreground">Infusion.IA</h1>
           </div>
-          <h1 className="font-display text-2xl font-bold text-foreground">Infusion.IA</h1>
           <p className="text-muted-foreground mt-1">
-            {isLogin ? "Acesse sua conta" : "Crie sua conta gr√°tis"}
+            {isLogin ? "Acesse sua conta" : "Crie sua conta gr·tis"}
           </p>
         </div>
 
@@ -134,7 +138,7 @@ export default function AuthPage() {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     type={showPassword ? "text" : "password"}
-                    placeholder="‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢"
+                    placeholder="ïïïïïïïï"
                     className="pl-10 pr-10 bg-secondary border-border"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -171,7 +175,7 @@ export default function AuthPage() {
             </form>
 
             <p className="text-center text-sm text-muted-foreground">
-              {isLogin ? "N√£o tem conta?" : "J√° tem conta?"}{" "}
+              {isLogin ? "N„o tem conta?" : "J· tem conta?"}{" "}
               <button
                 onClick={() => setIsLogin(!isLogin)}
                 className="text-primary hover:underline font-medium transition-colors"
@@ -184,13 +188,13 @@ export default function AuthPage() {
         </Card>
 
         <p className="text-center text-xs text-muted-foreground">
-          Ao continuar, voc√™ concorda com nossos{" "}
+          Ao continuar, vocÍ concorda com nossos{" "}
           <a href="#" className="text-primary hover:underline">
             Termos de Uso
           </a>{" "}
           e{" "}
           <a href="#" className="text-primary hover:underline">
-            Pol√≠tica de Privacidade
+            PolÌtica de Privacidade
           </a>
           .
         </p>
@@ -198,4 +202,3 @@ export default function AuthPage() {
     </div>
   );
 }
-

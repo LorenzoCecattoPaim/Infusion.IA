@@ -1,11 +1,10 @@
-import { useNavigate } from "react-router-dom";
+﻿import { useNavigate } from "react-router-dom";
 import {
   FileText,
   Image,
   Sparkles,
   Zap,
   MessageSquare,
-  BookOpen,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,9 +12,9 @@ import { useDashboardStats } from "@/hooks/useDashboardStats";
 
 const upcomingDates = [
   { date: "01/05", label: "Dia do Trabalho", days: "em breve" },
-  { date: "11/05", label: "Dia das Mães", days: "em breve" },
+  { date: "11/05", label: "Dia das MÃ£es", days: "em breve" },
   { date: "12/06", label: "Dia dos Namorados", days: "em breve" },
-  { date: "12/10", label: "Dia das Crianças", days: "em breve" },
+  { date: "12/10", label: "Dia das CrianÃ§as", days: "em breve" },
   { date: "25/12", label: "Natal", days: "em breve" },
 ];
 
@@ -43,14 +42,14 @@ export default function MarketingDashboard() {
       color: "text-primary",
     },
     {
-      label: "Créditos disponíveis",
+      label: "CrÃ©ditos disponÃ­veis",
       value: String(summary?.credits ?? 0),
       icon: Zap,
       color: "text-accent",
     },
   ];
 
-  const quickActions = [
+    const quickActions = [
     {
       title: "Consultor de Marketing IA",
       description: "Estratégias personalizadas para o seu negócio",
@@ -59,14 +58,21 @@ export default function MarketingDashboard() {
       gradient: "gradient-primary",
     },
     {
-      title: "Gerar Posts",
-      description: "Crie textos prontos com CTA e sugestão visual",
+      title: "Gerador de Texto",
+      description: "Legendas, títulos, descrições e prompts",
       icon: FileText,
+      route: "/gerador-texto",
+      gradient: "gradient-accent",
+    },
+    {
+      title: "Gerador de Posts",
+      description: "Imagens prontas para campanhas e redes sociais",
+      icon: Image,
       route: "/gerar-posts",
       gradient: "gradient-accent",
     },
     {
-      title: "Gerar Imagem",
+      title: "Gerador de Imagens",
       description: "Crie imagens profissionais com IA",
       icon: Image,
       route: "/gerador",
@@ -78,13 +84,6 @@ export default function MarketingDashboard() {
       icon: Sparkles,
       route: "/logo-generator",
       gradient: "gradient-primary",
-    },
-    {
-      title: "Biblioteca de Modelos",
-      description: "Templates prontos para acelerar seu marketing",
-      icon: BookOpen,
-      route: "/biblioteca",
-      gradient: "gradient-accent",
     },
   ];
 
@@ -99,7 +98,7 @@ export default function MarketingDashboard() {
           {greeting}!
         </h1>
         <p className="text-muted-foreground mt-1">
-          Seu hub de marketing está pronto para impulsionar as suas vendas.
+          Seu hub de marketing estÃ¡ pronto para impulsionar as suas vendas.
         </p>
       </div>
 
@@ -127,7 +126,7 @@ export default function MarketingDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           <h2 className="font-display text-lg font-semibold text-foreground">
-            Ações rápidas
+            AÃ§Ãµes rÃ¡pidas
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {quickActions.map((action) => (
@@ -193,4 +192,6 @@ export default function MarketingDashboard() {
     </div>
   );
 }
+
+
 
