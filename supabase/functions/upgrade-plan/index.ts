@@ -40,7 +40,7 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, plan: "free" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
       );
     }
 
@@ -59,7 +59,7 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, plan, dev_mode: true }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
       );
     }
 
@@ -67,7 +67,7 @@ serve(async (req) => {
     const pagarmeRes = await fetch("https://api.pagar.me/core/v5/subscriptions", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json; charset=UTF-8",
         Authorization: `Basic ${btoa(pagarmeKey + ":")}`,
       },
       body: JSON.stringify({
@@ -95,11 +95,13 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, plan, subscription_id: pagarmeData.id }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
     );
   } catch (err) {
     console.error("upgrade-plan error:", err);
     return errorResponse(String(err), 500);
   }
 });
+
+
 

@@ -11,19 +11,19 @@ import { Label } from "@/components/ui/label";
 export default function AuthPage() {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("");
+  const [email, setE-mail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleEmailAuth = async (e: React.FormEvent) => {
+  const handleE-mailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        toast.success("Login realizado com sucesso!");
+        toast.success("Login feito com sucesso!");
         navigate("/");
       } else {
         const { error } = await supabase.auth.signUp({
@@ -32,14 +32,14 @@ export default function AuthPage() {
           options: { emailRedirectTo: window.location.origin },
         });
         if (error) throw error;
-        toast.success("Conta criada! Verifique seu email para confirmar.");
+        toast.success("Conta criada! Verifique seu e-mail para confirmar.");
       }
     } catch (err: any) {
       const msg = err?.message || "Erro na autenticação";
       if (msg.includes("Invalid login credentials")) {
-        toast.error("Email ou senha incorretos.");
+        toast.error("E-mail ou senha incorretos.");
       } else if (msg.includes("User already registered")) {
-        toast.error("Este email já está cadastrado. Faça login.");
+        toast.error("Este e-mail já está cadastrado. Faça login.");
       } else {
         toast.error(msg);
       }
@@ -53,7 +53,7 @@ export default function AuthPage() {
       provider: "google",
       options: { redirectTo: window.location.origin },
     });
-    if (error) toast.error("Erro ao conectar com Google");
+    if (error) toast.error("Não foi possível conectar com o Google.");
   };
 
   return (
@@ -111,9 +111,9 @@ export default function AuthPage() {
             </div>
 
             {/* Form */}
-            <form onSubmit={handleEmailAuth} className="space-y-4">
+            <form onSubmit={handleE-mailAuth} className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-foreground">Email</Label>
+                <Label className="text-foreground">E-mail</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -121,7 +121,7 @@ export default function AuthPage() {
                     placeholder="seu@email.com"
                     className="pl-10 bg-secondary border-border"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => setE-mail(e.target.value)}
                     required
                     autoComplete="email"
                   />
@@ -198,3 +198,4 @@ export default function AuthPage() {
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   AGENTE_3_GERADOR_POSTS,
@@ -43,10 +43,10 @@ serve(async (req) => {
     const body = await req.json();
     const brief = body.brief || "";
     const channels = body.channels || (body.canal ? [body.canal] : ["Instagram"]);
-    const objetivo = body.objetivo || "NÃ£o informado";
-    const tipoConteudo = body.tipo_conteudo || body.tipoConteudo || "NÃ£o informado";
+    const objetivo = body.objetivo || "Não informado";
+    const tipoConteudo = body.tipo_conteudo || body.tipoConteudo || "Não informado";
 
-    if (!channels?.length) return errorResponse("canal Ã© obrigatÃ³rio", 400);
+    if (!channels?.length) return errorResponse("canal é obrigatório", 400);
 
     // Check credits
     const { data: credits } = await supabase
@@ -74,7 +74,7 @@ serve(async (req) => {
     );
     if (!validation.ok) {
       return errorResponse(
-        `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
+        `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
         400
       );
     }
@@ -88,10 +88,10 @@ serve(async (req) => {
     const userPrompt = `
 Canal: ${channels.join(", ")}
 Objetivo: ${objetivo}
-Tipo de conteÃºdo: ${tipoConteudo}
-Brief: ${brief || "NÃ£o informado"}
+Tipo de conteúdo: ${tipoConteudo}
+Brief: ${brief || "Não informado"}
 
-Gere um post para cada canal solicitado. Responda apenas com JSON vÃ¡lido.`.trim();
+Gere um post para cada canal solicitado. Responda apenas com JSON válido.`.trim();
 
     const model = Deno.env.get("AI_MODEL_MARKETING") || "gpt-4o";
 
@@ -113,7 +113,7 @@ Gere um post para cada canal solicitado. Responda apenas com JSON vÃ¡lido.`.tr
     const resultValidation = await validateWithAgent(result);
     if (!resultValidation.ok) {
       return errorResponse(
-        `ConteÃºdo gerado nÃ£o permitido: ${resultValidation.motivo_rejeicao}`,
+        `Conteúdo gerado não permitido: ${resultValidation.motivo_rejeicao}`,
         400
       );
     }
@@ -153,7 +153,7 @@ Gere um post para cada canal solicitado. Responda apenas com JSON vÃ¡lido.`.tr
     });
 
     return new Response(JSON.stringify(parsed), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" },
     });
   } catch (err) {
     logError("generate-posts", userId, err);
@@ -163,3 +163,6 @@ Gere um post para cada canal solicitado. Responda apenas com JSON vÃ¡lido.`.tr
     );
   }
 });
+
+
+

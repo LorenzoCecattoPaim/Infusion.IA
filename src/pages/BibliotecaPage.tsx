@@ -47,10 +47,10 @@ const allTemplates = [
   { title: "Post para Facebook", category: "Facebook", icon: Facebook, bg: "gradient-accent" },
   { title: "Mensagem WhatsApp", category: "WhatsApp", icon: MessageCircle, bg: "gradient-primary" },
   { title: "Email Marketing", category: "Email", icon: Mail, bg: "gradient-accent" },
-  { title: "Promoção Relâmpago", category: "Vendas", icon: Megaphone, bg: "gradient-primary" },
+  { title: "Promoção relâmpago", category: "Vendas", icon: Megaphone, bg: "gradient-primary" },
   { title: "Calendário de Conteúdo", category: "Planejamento", icon: Calendar, bg: "gradient-accent" },
   { title: "Datas Comemorativas", category: "Sazonal", icon: Gift, bg: "gradient-primary" },
-  { title: "Análise de Resultados", category: "Relatório", icon: TrendingUp, bg: "gradient-accent" },
+  { title: "Análise de resultados", category: "Relatório", icon: TrendingUp, bg: "gradient-accent" },
 ];
 
 export default function BibliotecaPage() {
@@ -81,7 +81,7 @@ export default function BibliotecaPage() {
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-lg font-semibold text-foreground">
-              Em Destaque
+              Em destaque
             </h2>
             <Button
               variant="ghost"
@@ -129,7 +129,7 @@ export default function BibliotecaPage() {
         {/* All templates */}
         <section className="space-y-4">
           <h2 className="font-display text-lg font-semibold text-foreground">
-            Todos os Modelos
+            Todos os modelos
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {allTemplates.map((t) => (
@@ -166,3 +166,4 @@ export default function BibliotecaPage() {
     </DashboardLayout>
   );
 }
+

@@ -165,7 +165,7 @@ serve(async (req) => {
         choices: [{ message: { role: "assistant", content: text } }],
       }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" },
       }
     );
   } catch (err) {
@@ -176,4 +176,6 @@ serve(async (req) => {
     );
   }
 });
+
+
 

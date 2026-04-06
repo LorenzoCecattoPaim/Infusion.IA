@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Briefcase,
   CheckCircle2,
@@ -31,18 +31,18 @@ function debounce<T extends (...args: any[]) => any>(fn: T, delay: number) {
 
 const SEGMENTOS = [
   "E-commerce",
-  "ServiÃ§os",
-  "SeguranÃ§a, Infraestrutura ou Obras",
+  "Serviços",
+  "Segurança, infraestrutura ou obras",
   "Transportes, Frete ou Viagens",
-  "Agricultura, Alimentos ou Restaurante",
+  "Agricultura, alimentos ou restaurante",
   "Ensino",
-  "InstituiÃ§Ã£o Financeira",
-  "Corretor de ImÃ³veis ou ImobiliÃ¡ria",
-  "Loja de VestuÃ¡rio, DecoraÃ§Ã£o ou Lar",
-  "ServiÃ§os de SaÃºde ou ClÃ­nica",
-  "ComunicaÃ§Ãµes ou ProduÃ§Ã£o de ConteÃºdo",
-  "Beleza, EstÃ©tica ou Barbearia",
-  "Loja de AutomÃ³veis ou Bem DurÃ¡vel",
+  "Instituição financeira",
+  "Corretor de imóveis ou imobiliária",
+  "Loja de vestuário, decoração ou lar",
+  "Serviços de Saúde ou Clínica",
+  "Comunicação ou produção de conteúdo",
+  "Beleza, estética ou barbearia",
+  "Loja de automóveis ou bem durável",
   "Outro",
 ];
 
@@ -51,58 +51,58 @@ const OBJETIVOS = [
   "Gerar leads",
   "Aumentar reconhecimento de marca",
   "Melhorar autoridade",
-  "LanÃ§ar um produto",
+  "Lançar um produto",
   "Outro",
 ];
 
 const PUBLICOS = [
-  "Jovens (13â€“24 anos)",
-  "Adultos (25â€“40 anos)",
+  "Jovens (13-24 anos)",
+  "Adultos (25–40 anos)",
   "Adultos (40+)",
   "Empresas (B2B)",
-  "PÃºblico geral",
+  "Público geral",
 ];
 
 const TONS = [
   "Formal",
   "Profissional",
-  "DescontraÃ­do",
-  "EngraÃ§ado / IrÃ´nico",
-  "Inspirador / Motivacional",
+  "Descontraído",
+  "Engraçado / Irônico",
+  "Inspirador / motivacional",
 ];
 
 const MARCA_OPCOES = [
   "Moderna e inovadora",
-  "Tradicional e confiÃ¡vel",
+  "Tradicional e confiável",
   "Luxuosa / premium",
-  "AcessÃ­vel / popular",
+  "Acessível / popular",
   "Criativa / disruptiva",
 ];
 
-const CANAIS = ["Instagram", "TikTok", "YouTube", "LinkedIn", "Site prÃ³prio", "WhatsApp"];
+const CANAIS = ["Instagram", "TikTok", "YouTube", "LinkedIn", "Site próprio", "WhatsApp"];
 
 const TIPOS_CONTEUDO = [
   "Posts para redes sociais",
-  "AnÃºncios (ads)",
+  "Anúncios (ads)",
   "Textos para site",
-  "E-mails marketing",
-  "Roteiros de vÃ­deo",
+  "E-mails de marketing",
+  "Roteiros de vídeo",
   "Imagens com IA",
 ];
 
-const NIVEIS = ["Iniciante", "IntermediÃ¡rio", "AvanÃ§ado"];
+const NIVEIS = ["Iniciante", "Intermediário", "Avançado"];
 
 const DESAFIOS = [
   "Falta de vendas",
   "Baixo engajamento",
-  "Pouco trÃ¡fego",
-  "Falta de consistÃªncia",
-  "Dificuldade em criar conteÃºdo",
+  "Pouco tráfego",
+  "Falta de consistência",
+  "Dificuldade em criar conteúdo",
   "Outro",
 ];
 
 const USO_IA = [
-  "Criar conteÃºdo automaticamente",
+  "Criar conteúdo automaticamente",
   "Gerar ideias",
   "Melhorar textos existentes",
   "Criar imagens",
@@ -198,7 +198,7 @@ export default function MeuNegocioPage() {
 
     for (const file of files) {
       if (file.size > 20 * 1024 * 1024) {
-        toast.error(`${file.name} Ã© maior que 20MB.`);
+        toast.error(`${file.name} é maior que 20MB.`);
         continue;
       }
       try {
@@ -242,7 +242,7 @@ export default function MeuNegocioPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-2xl font-bold text-foreground flex items-center gap-2">
-              <Briefcase className="h-6 w-6 text-primary" /> Meu NegÃ³cio
+              <Briefcase className="h-6 w-6 text-primary" /> Meu Negócio
             </h1>
             <p className="text-muted-foreground mt-1">
               Configure o contexto da sua empresa para personalizar a IA
@@ -254,7 +254,7 @@ export default function MeuNegocioPage() {
             )}
             {saveStatus === "saved" && (
               <span className="text-xs text-primary flex items-center gap-1">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Salvo Ã s {lastSaved}
+                <CheckCircle2 className="h-3.5 w-3.5" /> Salvo às {lastSaved}
               </span>
             )}
             {saveStatus === "error" && (
@@ -267,7 +267,7 @@ export default function MeuNegocioPage() {
 
         <Card className="bg-card border-border shadow-card">
           <CardHeader className="border-b border-border">
-            <CardTitle className="font-display text-foreground">Contexto do NegÃ³cio</CardTitle>
+            <CardTitle className="font-display text-foreground">Contexto do negócio</CardTitle>
           </CardHeader>
           <CardContent className="p-6 space-y-6">
             <div className="space-y-2">
@@ -275,13 +275,13 @@ export default function MeuNegocioPage() {
               <Input
                 value={profile.nome_empresa || ""}
                 onChange={(e) => handleChange("nome_empresa", e.target.value)}
-                placeholder="Ex: Padaria do JoÃ£o"
+                placeholder="Ex.: Padaria do João"
                 className="bg-secondary border-border"
               />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-foreground font-medium">1. Qual Ã© o seu segmento de atuaÃ§Ã£o?</Label>
+              <Label className="text-foreground font-medium">1. Qual é o seu segmento de atuação?</Label>
               <RadioGroup
                 value={
                   SEGMENTOS.includes(profile.segmento_atuacao || "")
@@ -322,7 +322,7 @@ export default function MeuNegocioPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-foreground font-medium">2. Qual Ã© o principal objetivo da sua empresa atualmente?</Label>
+              <Label className="text-foreground font-medium">2. Qual é o principal objetivo da sua empresa atualmente?</Label>
               <RadioGroup
                 value={
                   OBJETIVOS.includes(profile.objetivo_principal || "")
@@ -363,7 +363,7 @@ export default function MeuNegocioPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-foreground font-medium">3. Quem Ã© o seu pÃºblico-alvo?</Label>
+              <Label className="text-foreground font-medium">3. Quem é o seu público-alvo?</Label>
               <RadioGroup
                 value={profile.publico_alvo || ""}
                 onValueChange={(v) => handleChange("publico_alvo", v)}
@@ -387,7 +387,7 @@ export default function MeuNegocioPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-foreground font-medium">4. Qual Ã© o tom de comunicaÃ§Ã£o da sua marca?</Label>
+              <Label className="text-foreground font-medium">4. Qual é o tom de comunicação da sua marca?</Label>
               <RadioGroup
                 value={profile.tom_comunicacao || ""}
                 onValueChange={(v) => handleChange("tom_comunicacao", v)}
@@ -411,7 +411,7 @@ export default function MeuNegocioPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-foreground font-medium">5. Qual dessas opÃ§Ãµes descreve melhor sua marca? (mÃºltipla escolha)</Label>
+              <Label className="text-foreground font-medium">5. Qual dessas opções descreve melhor a sua marca? (múltipla escolha)</Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {MARCA_OPCOES.map((opt) => (
                   <label
@@ -442,7 +442,7 @@ export default function MeuNegocioPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-foreground font-medium">6. Em quais canais vocÃª mais atua? (mÃºltipla escolha)</Label>
+              <Label className="text-foreground font-medium">6. Em quais canais você mais atua? (múltipla escolha)</Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {CANAIS.map((opt) => (
                   <label
@@ -467,7 +467,7 @@ export default function MeuNegocioPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-foreground font-medium">7. Qual tipo de conteÃºdo vocÃª mais precisa gerar?</Label>
+              <Label className="text-foreground font-medium">7. Qual tipo de conteúdo você mais precisa gerar?</Label>
               <RadioGroup
                 value={(profile.tipo_conteudo || [])[0] || ""}
                 onValueChange={(v) => handleChange("tipo_conteudo", [v])}
@@ -491,7 +491,7 @@ export default function MeuNegocioPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-foreground font-medium">8. Qual Ã© o nÃ­vel de experiÃªncia com marketing digital?</Label>
+              <Label className="text-foreground font-medium">8. Qual é o nível de experiência com marketing digital?</Label>
               <RadioGroup
                 value={profile.nivel_experiencia || ""}
                 onValueChange={(v) => handleChange("nivel_experiencia", v)}
@@ -515,7 +515,7 @@ export default function MeuNegocioPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-foreground font-medium">9. Qual Ã© o maior desafio da sua empresa hoje?</Label>
+              <Label className="text-foreground font-medium">9. Qual é o maior desafio da sua empresa hoje?</Label>
               <RadioGroup
                 value={
                   DESAFIOS.includes(profile.maior_desafio || "")
@@ -556,7 +556,7 @@ export default function MeuNegocioPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-foreground font-medium">10. Como vocÃª quer que a IA te ajude?</Label>
+              <Label className="text-foreground font-medium">10. Como você quer que a IA ajude?</Label>
               <RadioGroup
                 value={profile.uso_ia || ""}
                 onValueChange={(v) => handleChange("uso_ia", v)}
@@ -584,12 +584,12 @@ export default function MeuNegocioPage() {
         <Card className="bg-card border-border shadow-card">
           <CardHeader className="border-b border-border">
             <CardTitle className="font-display text-foreground flex items-center gap-2">
-              <UploadCloud className="h-5 w-5 text-primary" /> Materiais da Empresa
+              <UploadCloud className="h-5 w-5 text-primary" /> Materiais da empresa
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
             <p className="text-sm text-muted-foreground">
-              FaÃ§a upload de documentos (cardÃ¡pios, catÃ¡logos, briefings,
+              Faça upload de documentos (cardápios, catálogos, briefings,
               scripts) para que a IA use como contexto nas respostas.
             </p>
 
@@ -610,10 +610,10 @@ export default function MeuNegocioPage() {
             >
               <UploadCloud className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">
-                Clique para fazer upload ou arraste arquivos aqui
+                Clique para fazer upload ou arraste os arquivos aqui
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                PDF, DOC, TXT â€” mÃ¡x. 20MB por arquivo
+                PDF, DOC, TXT — máx. 20MB por arquivo
               </p>
               <input
                 ref={fileInputRef}
@@ -658,8 +658,8 @@ export default function MeuNegocioPage() {
           <CardContent className="p-4 flex items-center gap-3">
             <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
             <p className="text-sm text-muted-foreground">
-              As informaÃ§Ãµes sÃ£o salvas automaticamente e usadas para
-              personalizar todas as respostas da IA ao seu negÃ³cio especÃ­fico.
+              As informações são salvas automaticamente e usadas para
+              personalizar todas as respostas da IA ao seu negócio específico.
             </p>
           </CardContent>
         </Card>
@@ -667,3 +667,8 @@ export default function MeuNegocioPage() {
     </DashboardLayout>
   );
 }
+
+
+
+
+

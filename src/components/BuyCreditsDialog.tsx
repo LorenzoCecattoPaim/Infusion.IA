@@ -1,4 +1,4 @@
-﻿import {
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -25,7 +25,7 @@ const PLANS = [
     price: "R$ 19,90",
     icon: Zap,
     highlight: false,
-    description: "Ideal para comeÃ§ar",
+    description: "Ideal para começar",
   },
   {
     id: "pro",
@@ -43,7 +43,7 @@ const PLANS = [
     price: "R$ 129,90",
     icon: Crown,
     highlight: false,
-    description: "Para times e agÃªncias",
+    description: "Para times e agências",
   },
 ];
 
@@ -65,7 +65,7 @@ export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialo
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type": "application/json; charset=UTF-8",
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ plan: planId }),
@@ -76,10 +76,10 @@ export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialo
         window.open(data.payment_url, "_blank");
         onOpenChange(false);
       } else {
-        toast.error(data.error || "Erro ao iniciar pagamento");
+        toast.error(data.error || "Não foi possível iniciar o pagamento.");
       }
     } catch {
-      toast.error("Erro ao conectar com o servidor de pagamento");
+      toast.error("Não foi possível conectar ao servidor de pagamentos.");
     } finally {
       setLoading(null);
     }
@@ -89,9 +89,9 @@ export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="font-display text-foreground">Comprar CrÃ©ditos</DialogTitle>
+          <DialogTitle className="font-display text-foreground">Comprar créditos</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Escolha o pacote ideal para o seu negÃ³cio
+            Escolha o pacote ideal para o seu negócio
           </DialogDescription>
         </DialogHeader>
 
@@ -107,7 +107,7 @@ export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialo
             >
               {plan.highlight && (
                 <span className="absolute -top-2.5 left-4 text-[10px] font-bold gradient-primary text-primary-foreground px-2 py-0.5 rounded-full">
-                  MAIS POPULAR
+                  Mais popular
                 </span>
               )}
               <div className="flex items-center gap-3">
@@ -116,7 +116,7 @@ export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialo
                 </div>
                 <div>
                   <p className="font-semibold text-foreground text-sm">{plan.label}</p>
-                  <p className="text-xs text-muted-foreground">{plan.credits} crÃ©ditos â€¢ {plan.description}</p>
+                  <p className="text-xs text-muted-foreground">{plan.credits} créditos • {plan.description}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -135,7 +135,7 @@ export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialo
         </div>
 
         <p className="text-xs text-muted-foreground text-center mt-2">
-          Pagamento seguro via Pagar.me â€¢ CrÃ©ditos adicionados imediatamente apÃ³s confirmaÃ§Ã£o
+          Pagamento seguro via Pagar.me • Créditos adicionados imediatamente após confirmação
         </p>
         <Button
           variant="outline"
@@ -150,3 +150,5 @@ export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialo
     </Dialog>
   );
 }
+
+

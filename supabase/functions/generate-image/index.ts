@@ -1,4 +1,4 @@
-﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   AGENTE_4_OTIMIZADOR_PROMPT,
@@ -24,7 +24,7 @@ async function generateWithLeonardo(
   quality: "standard" | "premium"
 ): Promise<string> {
   const apiKey = LEONARDO_API_KEY();
-  if (!apiKey) throw new Error("LEONARDO_API_KEY nÃ£o configurado.");
+  if (!apiKey) throw new Error("LEONARDO_API_KEY não configurado.");
 
   const body = {
     prompt,
@@ -43,7 +43,7 @@ async function generateWithLeonardo(
     {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json; charset=UTF-8",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
@@ -57,7 +57,7 @@ async function generateWithLeonardo(
 
   const initData = await initRes.json();
   const generationId = initData.sdGenerationJob?.generationId;
-  if (!generationId) throw new Error("Leonardo: falha ao iniciar geraÃ§Ã£o");
+  if (!generationId) throw new Error("Leonardo: falha ao iniciar geração");
 
   // Poll for completion
   for (let i = 0; i < 30; i++) {
@@ -77,16 +77,16 @@ async function generateWithLeonardo(
 
     if (gen?.status === "COMPLETE") {
       const url = gen.generated_images?.[0]?.url;
-      if (!url) throw new Error("Leonardo: URL da imagem nÃ£o encontrada");
+      if (!url) throw new Error("Leonardo: URL da imagem não encontrada");
       return url;
     }
 
     if (gen?.status === "FAILED") {
-      throw new Error("Leonardo: geraÃ§Ã£o falhou");
+      throw new Error("Leonardo: geração falhou");
     }
   }
 
-  throw new Error("Leonardo: timeout na geraÃ§Ã£o (60s)");
+  throw new Error("Leonardo: timeout na geração (60s)");
 }
 
 serve(async (req) => {
@@ -118,7 +118,7 @@ serve(async (req) => {
 
     const { prompt, quality = "standard", template } = await req.json();
 
-    if (!prompt?.trim()) return errorResponse("prompt Ã© obrigatÃ³rio", 400);
+    if (!prompt?.trim()) return errorResponse("prompt é obrigatório", 400);
 
     const creditCost = quality === "premium" ? 10 : 5;
 
@@ -137,15 +137,15 @@ serve(async (req) => {
     const validation = await validateWithAgent(prompt);
     if (!validation.ok) {
       return errorResponse(
-        `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
+        `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
         400
       );
     }
 
     // Optimize prompt with Agent 4
     const userContent = template
-      ? `Otimize este prompt para geraÃ§Ã£o de imagem. Template: ${template}. DescriÃ§Ã£o: ${prompt}`
-      : `Otimize este prompt para geraÃ§Ã£o de imagem: ${prompt}`;
+      ? `Otimize este prompt para geração de imagem. Template: ${template}. Descrição: ${prompt}`
+      : `Otimize este prompt para geração de imagem: ${prompt}`;
 
     let optimized: {
       prompt_1: string;
@@ -237,7 +237,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ images: savedImages, style_notes: optimized.style_notes }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
     );
   } catch (err) {
     logError("generate-image", userId, err);
@@ -247,5 +247,8 @@ serve(async (req) => {
     );
   }
 });
+
+
+
 
 

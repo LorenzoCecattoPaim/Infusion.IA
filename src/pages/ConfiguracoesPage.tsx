@@ -56,7 +56,7 @@ export default function ConfiguracoesPage() {
           </CardHeader>
           <CardContent className="p-6 space-y-4">
             <div className="space-y-2">
-              <Label className="text-foreground">Email</Label>
+              <Label className="text-foreground">E-mail</Label>
               <Input
                 value={user?.email || ""}
                 disabled
@@ -66,7 +66,7 @@ export default function ConfiguracoesPage() {
             <div className="flex gap-3">
               <Button
                 variant="outline"
-                onClick={() => toast.info("Funcionalidade em breve.")}
+                onClick={() => toast.info("Disponível em breve.")}
               >
                 Alterar senha
               </Button>
@@ -85,7 +85,7 @@ export default function ConfiguracoesPage() {
         <Card className="bg-card border-border shadow-card">
           <CardHeader className="border-b border-border">
             <CardTitle className="font-display text-foreground">
-              Dados do Negócio
+              Dados do negócio
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
@@ -125,7 +125,7 @@ export default function ConfiguracoesPage() {
                 </div>
                 <Switch
                   onCheckedChange={() =>
-                    toast.info("Integração em breve disponível.")
+                    toast.info("Integração disponível em breve.")
                   }
                 />
               </div>
@@ -177,7 +177,7 @@ export default function ConfiguracoesPage() {
         <Card className="bg-card border-destructive/30 shadow-card">
           <CardHeader className="border-b border-border">
             <CardTitle className="font-display text-destructive">
-              Zona de Perigo
+              Zona de perigo
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
@@ -188,7 +188,7 @@ export default function ConfiguracoesPage() {
               variant="outline"
               className="border-destructive/30 text-destructive hover:bg-destructive/10"
               onClick={() =>
-                toast.error("Contate o suporte para excluir sua conta.")
+                toast.error("Fale com o suporte para excluir sua conta.")
               }
             >
               Excluir conta permanentemente
@@ -199,3 +199,4 @@ export default function ConfiguracoesPage() {
     </DashboardLayout>
   );
 }
+

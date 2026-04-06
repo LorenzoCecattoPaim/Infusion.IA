@@ -38,7 +38,7 @@ serve(async (req) => {
     if (order?.status === "paid") {
       return new Response(
         `<html><body><h1>Créditos já adicionados!</h1><a href="/">Voltar</a></body></html>`,
-        { headers: { "Content-Type": "text/html" } }
+        { headers: { "Content-Type": "text/html; charset=UTF-8" } }
       );
     }
 
@@ -65,10 +65,12 @@ serve(async (req) => {
 
     return new Response(
       `<html><body><h1>✅ ${credits} créditos adicionados (DEV MODE)!</h1><a href="/">Voltar ao app</a></body></html>`,
-      { headers: { "Content-Type": "text/html" } }
+      { headers: { "Content-Type": "text/html; charset=UTF-8" } }
     );
   } catch (err) {
     return errorResponse(String(err), 500);
   }
 });
+
+
 

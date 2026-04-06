@@ -59,7 +59,7 @@ serve(async (req) => {
           order_id: order.id,
           dev_mode: true,
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
       );
     }
 
@@ -67,7 +67,7 @@ serve(async (req) => {
     const pagarmeRes = await fetch("https://api.pagar.me/core/v5/orders", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json; charset=UTF-8",
         Authorization: `Basic ${btoa(pagarmeKey + ":")}`,
       },
       body: JSON.stringify({
@@ -125,7 +125,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ payment_url: paymentUrl, order_id: order.id }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
     );
   } catch (err) {
     console.error("buy-credits error:", err);
@@ -135,4 +135,6 @@ serve(async (req) => {
     );
   }
 });
+
+
 

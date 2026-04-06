@@ -1,13 +1,15 @@
-﻿-- ============================================================
--- INFUSION.IA â€” SCHEMA COMPLETO
+-- ============================================================
+-- INFUSION.IA — SCHEMA COMPLETO
 -- Execute este arquivo no Supabase SQL Editor
 -- ============================================================
 
--- â”€â”€â”€ EXTENSÃ•ES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+SET client_encoding = 'UTF8';
+
+-- --- EXTENSÕES -----------------------------------------------
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- â”€â”€â”€ TABELA: user_credits â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- TABELA: user_credits ------------------------------------
 CREATE TABLE IF NOT EXISTS public.user_credits (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -18,11 +20,11 @@ CREATE TABLE IF NOT EXISTS public.user_credits (
   UNIQUE (user_id)
 );
 
-COMMENT ON TABLE public.user_credits IS 'Saldo de crÃ©ditos e plano de cada usuÃ¡rio';
-COMMENT ON COLUMN public.user_credits.credits IS 'CrÃ©ditos disponÃ­veis para uso';
+COMMENT ON TABLE public.user_credits IS 'Saldo de créditos e plano de cada usuário';
+COMMENT ON COLUMN public.user_credits.credits IS 'Créditos disponíveis para uso';
 COMMENT ON COLUMN public.user_credits.plan IS 'Plano atual: free | starter | pro | business';
 
--- â”€â”€â”€ TABELA: business_profiles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- TABELA: business_profiles -------------------------------
 CREATE TABLE IF NOT EXISTS public.business_profiles (
   id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id              UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -51,7 +53,7 @@ CREATE TABLE IF NOT EXISTS public.business_profiles (
   UNIQUE (user_id)
 );
 
-COMMENT ON TABLE public.business_profiles IS 'Perfil do negÃ³cio para personalizaÃ§Ã£o da IA';
+COMMENT ON TABLE public.business_profiles IS 'Perfil do negócio para personalização da IA';
 -- Compatibilidade: adicionar novos campos do contexto inteligente
 ALTER TABLE public.business_profiles
   ADD COLUMN IF NOT EXISTS segmento_atuacao   TEXT,
@@ -64,7 +66,7 @@ ALTER TABLE public.business_profiles
   ADD COLUMN IF NOT EXISTS uso_ia             TEXT,
   ADD COLUMN IF NOT EXISTS contexto_json      JSONB;
 
--- â”€â”€â”€ TABELA: business_materials â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- TABELA: business_materials ------------------------------
 CREATE TABLE IF NOT EXISTS public.business_materials (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -75,10 +77,10 @@ CREATE TABLE IF NOT EXISTS public.business_materials (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE public.business_materials IS 'Materiais enviados pelo usuÃ¡rio para contexto da IA (RAG)';
+COMMENT ON TABLE public.business_materials IS 'Materiais enviados pelo usuário para contexto da IA (RAG)';
 CREATE INDEX IF NOT EXISTS idx_business_materials_user ON public.business_materials(user_id);
 
--- â”€â”€â”€ TABELA: generated_images â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- TABELA: generated_images --------------------------------
 CREATE TABLE IF NOT EXISTS public.generated_images (
   id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id           UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -90,9 +92,9 @@ CREATE TABLE IF NOT EXISTS public.generated_images (
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE public.generated_images IS 'HistÃ³rico de imagens geradas por usuÃ¡rio';
+COMMENT ON TABLE public.generated_images IS 'Histórico de imagens geradas por usuário';
 CREATE INDEX IF NOT EXISTS idx_generated_images_user ON public.generated_images(user_id, created_at DESC);
--- â”€â”€â”€ TABELA: generated_logos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- TABELA: generated_logos -----------------------------------------------
 CREATE TABLE IF NOT EXISTS public.generated_logos (
   id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id           UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -103,10 +105,10 @@ CREATE TABLE IF NOT EXISTS public.generated_logos (
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE public.generated_logos IS 'HistÃ³rico de logos gerados por usuÃ¡rio';
+COMMENT ON TABLE public.generated_logos IS 'Histórico de logos gerados por usuário';
 CREATE INDEX IF NOT EXISTS idx_generated_logos_user ON public.generated_logos(user_id, created_at DESC);
 
--- â”€â”€â”€ TABELA: generated_posts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- TABELA: generated_posts -----------------------------------------------
 CREATE TABLE IF NOT EXISTS public.generated_posts (
   id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id           UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -120,10 +122,10 @@ CREATE TABLE IF NOT EXISTS public.generated_posts (
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE public.generated_posts IS 'Posts gerados por usuÃ¡rio';
+COMMENT ON TABLE public.generated_posts IS 'Posts gerados por usuário';
 CREATE INDEX IF NOT EXISTS idx_generated_posts_user ON public.generated_posts(user_id, created_at DESC);
 
--- â”€â”€â”€ TABELA: chat_conversations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- TABELA: chat_conversations -----------------------------------------------
 CREATE TABLE IF NOT EXISTS public.chat_conversations (
   id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id           UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -135,7 +137,7 @@ CREATE TABLE IF NOT EXISTS public.chat_conversations (
 COMMENT ON TABLE public.chat_conversations IS 'Conversas do consultor de marketing';
 CREATE INDEX IF NOT EXISTS idx_chat_conversations_user ON public.chat_conversations(user_id, updated_at DESC);
 
--- â”€â”€â”€ TABELA: chat_messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- TABELA: chat_messages -----------------------------------------------
 CREATE TABLE IF NOT EXISTS public.chat_messages (
   id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   conversation_id   UUID NOT NULL REFERENCES public.chat_conversations(id) ON DELETE CASCADE,
@@ -148,7 +150,7 @@ CREATE TABLE IF NOT EXISTS public.chat_messages (
 COMMENT ON TABLE public.chat_messages IS 'Mensagens de conversas do consultor';
 CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation ON public.chat_messages(conversation_id, created_at ASC);
 
--- â”€â”€â”€ TABELA: payment_orders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- TABELA: payment_orders ----------------------------------
 CREATE TABLE IF NOT EXISTS public.payment_orders (
   id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id              UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -162,11 +164,11 @@ CREATE TABLE IF NOT EXISTS public.payment_orders (
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE public.payment_orders IS 'Pedidos de compra de crÃ©ditos';
+COMMENT ON TABLE public.payment_orders IS 'Pedidos de compra de créditos';
 CREATE INDEX IF NOT EXISTS idx_payment_orders_user ON public.payment_orders(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_payment_orders_gateway ON public.payment_orders(gateway_order_id);
 
--- â”€â”€â”€ TABELA: rate_limits â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- TABELA: rate_limits -------------------------------------
 CREATE TABLE IF NOT EXISTS public.rate_limits (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id      UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -176,9 +178,9 @@ CREATE TABLE IF NOT EXISTS public.rate_limits (
   UNIQUE (user_id, action)
 );
 
-COMMENT ON TABLE public.rate_limits IS 'Rate limiting por usuÃ¡rio e aÃ§Ã£o';
+COMMENT ON TABLE public.rate_limits IS 'Rate limiting por usuário e ação';
 
--- â”€â”€â”€ ROW LEVEL SECURITY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- ROW LEVEL SECURITY --------------------------------------
 
 -- Habilitar RLS em todas as tabelas
 ALTER TABLE public.user_credits ENABLE ROW LEVEL SECURITY;
@@ -192,14 +194,14 @@ ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payment_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rate_limits ENABLE ROW LEVEL SECURITY;
 
--- user_credits: usuÃ¡rio vÃª e edita apenas seus prÃ³prios dados
+-- user_credits: usuário vê e edita apenas seus próprios dados
 CREATE POLICY "user_credits_select" ON public.user_credits
   FOR SELECT USING (auth.uid() = user_id);
 
 CREATE POLICY "user_credits_update" ON public.user_credits
   FOR UPDATE USING (auth.uid() = user_id);
 
--- business_profiles: CRUD apenas do prÃ³prio perfil
+-- business_profiles: CRUD apenas do próprio perfil
 CREATE POLICY "business_profiles_select" ON public.business_profiles
   FOR SELECT USING (auth.uid() = user_id);
 
@@ -212,7 +214,7 @@ CREATE POLICY "business_profiles_update" ON public.business_profiles
 CREATE POLICY "business_profiles_delete" ON public.business_profiles
   FOR DELETE USING (auth.uid() = user_id);
 
--- business_materials: CRUD apenas dos prÃ³prios materiais
+-- business_materials: CRUD apenas dos próprios materiais
 CREATE POLICY "business_materials_select" ON public.business_materials
   FOR SELECT USING (auth.uid() = user_id);
 
@@ -222,27 +224,27 @@ CREATE POLICY "business_materials_insert" ON public.business_materials
 CREATE POLICY "business_materials_delete" ON public.business_materials
   FOR DELETE USING (auth.uid() = user_id);
 
--- generated_images: apenas do prÃ³prio usuÃ¡rio
+-- generated_images: apenas do próprio usuário
 CREATE POLICY "generated_images_select" ON public.generated_images
   FOR SELECT USING (auth.uid() = user_id);
 
 CREATE POLICY "generated_images_insert" ON public.generated_images
   FOR INSERT WITH CHECK (auth.uid() = user_id);
--- generated_logos: apenas do prÃ³prio usuÃ¡rio
+-- generated_logos: apenas do próprio usuário
 CREATE POLICY "generated_logos_select" ON public.generated_logos
   FOR SELECT USING (auth.uid() = user_id);
 
 CREATE POLICY "generated_logos_insert" ON public.generated_logos
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- generated_posts: apenas do prÃ³prio usuÃ¡rio
+-- generated_posts: apenas do próprio usuário
 CREATE POLICY "generated_posts_select" ON public.generated_posts
   FOR SELECT USING (auth.uid() = user_id);
 
 CREATE POLICY "generated_posts_insert" ON public.generated_posts
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- chat_conversations: apenas do prÃ³prio usuÃ¡rio
+-- chat_conversations: apenas do próprio usuário
 CREATE POLICY "chat_conversations_select" ON public.chat_conversations
   FOR SELECT USING (auth.uid() = user_id);
 
@@ -255,7 +257,7 @@ CREATE POLICY "chat_conversations_update" ON public.chat_conversations
 CREATE POLICY "chat_conversations_delete" ON public.chat_conversations
   FOR DELETE USING (auth.uid() = user_id);
 
--- chat_messages: apenas do prÃ³prio usuÃ¡rio
+-- chat_messages: apenas do próprio usuário
 CREATE POLICY "chat_messages_select" ON public.chat_messages
   FOR SELECT USING (auth.uid() = user_id);
 
@@ -265,11 +267,11 @@ CREATE POLICY "chat_messages_insert" ON public.chat_messages
 CREATE POLICY "chat_messages_delete" ON public.chat_messages
   FOR DELETE USING (auth.uid() = user_id);
 
--- payment_orders: apenas do prÃ³prio usuÃ¡rio (sem ediÃ§Ã£o direta)
+-- payment_orders: apenas do próprio usuário (sem edição direta)
 CREATE POLICY "payment_orders_select" ON public.payment_orders
   FOR SELECT USING (auth.uid() = user_id);
 
--- â”€â”€â”€ FUNÃ‡ÃƒO: auto-criar user_credits no signup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- FUNÇÃO: auto-criar user_credits no signup ---------------
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -289,14 +291,14 @@ BEGIN
 END;
 $$;
 
--- Trigger: dispara apÃ³s novo usuÃ¡rio criado no auth
+-- Trigger: dispara após novo usuário criado no auth
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_new_user();
 
--- â”€â”€â”€ FUNÃ‡ÃƒO: updated_at automÃ¡tico â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- FUNÇÃO: updated_at automático ---------------------------
 CREATE OR REPLACE FUNCTION public.set_updated_at()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -322,7 +324,7 @@ CREATE TRIGGER set_chat_conversations_updated_at
   BEFORE UPDATE ON public.chat_conversations
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- â”€â”€â”€ FUNÃ‡ÃƒO: consumir crÃ©ditos (transaÃ§Ã£o atÃ´mica) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- FUNÇÃO: consumir créditos (transação atômica) -----------
 CREATE OR REPLACE FUNCTION public.consume_credits(
   p_user_id UUID,
   p_amount  INTEGER
@@ -352,7 +354,7 @@ BEGIN
 END;
 $$;
 
--- â”€â”€â”€ FUNÃ‡ÃƒO: adicionar crÃ©ditos (apÃ³s pagamento) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- FUNÇÃO: adicionar créditos (após pagamento) -------------
 CREATE OR REPLACE FUNCTION public.add_credits(
   p_user_id UUID,
   p_amount  INTEGER
@@ -380,7 +382,7 @@ BEGIN
 END;
 $$;
 
--- â”€â”€â”€ VIEW: resumo do usuÃ¡rio (stats do dashboard) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- VIEW: resumo do usuário (stats do dashboard) ------------
 CREATE OR REPLACE VIEW public.user_summary AS
 SELECT
   uc.user_id,
@@ -395,12 +397,12 @@ SELECT
 FROM public.user_credits uc
 LEFT JOIN public.business_profiles bp ON bp.user_id = uc.user_id;
 
--- Permitir que usuÃ¡rio veja apenas seu prÃ³prio resumo
+-- Permitir que usuário veja apenas seu próprio resumo
 CREATE POLICY "user_summary_select" ON public.user_credits
   FOR SELECT USING (auth.uid() = user_id);
 
--- â”€â”€â”€ DADOS INICIAIS: usuÃ¡rios existentes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
--- Garante que usuÃ¡rios jÃ¡ criados antes do trigger tambÃ©m tenham crÃ©ditos
+-- --- DADOS INICIAIS: usuários existentes ---------------------
+-- Garante que usuários já criados antes do trigger também tenham créditos
 INSERT INTO public.user_credits (user_id, credits, plan)
 SELECT id, 100, 'free'
 FROM auth.users
@@ -410,7 +412,7 @@ INSERT INTO public.business_profiles (user_id)
 SELECT id FROM auth.users
 ON CONFLICT (user_id) DO NOTHING;
 
--- â”€â”€â”€ GRANT: service role pode operar todas as tabelas â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- GRANT: service role pode operar todas as tabelas --------
 GRANT ALL ON public.user_credits TO service_role;
 GRANT ALL ON public.business_profiles TO service_role;
 GRANT ALL ON public.business_materials TO service_role;
@@ -422,8 +424,12 @@ GRANT ALL ON public.chat_messages TO service_role;
 GRANT ALL ON public.payment_orders TO service_role;
 GRANT ALL ON public.rate_limits TO service_role;
 
--- â”€â”€â”€ FIM DO SCHEMA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- --- FIM DO SCHEMA --------------------------------------------
 -- Verifique em: Supabase Dashboard > Table Editor
+
+
+
+
 
 
 

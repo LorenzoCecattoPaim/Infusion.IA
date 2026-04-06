@@ -1,4 +1,4 @@
-﻿import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   FileText,
   Image,
@@ -13,9 +13,9 @@ import { useDashboardStats } from "@/hooks/useDashboardStats";
 
 const upcomingDates = [
   { date: "01/05", label: "Dia do Trabalho", days: "em breve" },
-  { date: "11/05", label: "Dia das MÃ£es", days: "em breve" },
+  { date: "11/05", label: "Dia das Mães", days: "em breve" },
   { date: "12/06", label: "Dia dos Namorados", days: "em breve" },
-  { date: "12/10", label: "Dia das CrianÃ§as", days: "em breve" },
+  { date: "12/10", label: "Dia das Crianças", days: "em breve" },
   { date: "25/12", label: "Natal", days: "em breve" },
 ];
 
@@ -43,7 +43,7 @@ export default function MarketingDashboard() {
       color: "text-primary",
     },
     {
-      label: "CrÃ©ditos restantes",
+      label: "Créditos disponíveis",
       value: String(summary?.credits ?? 0),
       icon: Zap,
       color: "text-accent",
@@ -53,14 +53,14 @@ export default function MarketingDashboard() {
   const quickActions = [
     {
       title: "Consultor de Marketing IA",
-      description: "EstratÃ©gias personalizadas para seu negÃ³cio",
+      description: "Estratégias personalizadas para o seu negócio",
       icon: MessageSquare,
       route: "/chat",
       gradient: "gradient-primary",
     },
     {
       title: "Gerar Posts",
-      description: "Crie textos prontos com CTA e sugestÃ£o visual",
+      description: "Crie textos prontos com CTA e sugestão visual",
       icon: FileText,
       route: "/gerar-posts",
       gradient: "gradient-accent",
@@ -99,7 +99,7 @@ export default function MarketingDashboard() {
           {greeting}!
         </h1>
         <p className="text-muted-foreground mt-1">
-          Seu hub de marketing estÃ¡ pronto para impulsionar suas vendas.
+          Seu hub de marketing está pronto para impulsionar as suas vendas.
         </p>
       </div>
 
@@ -127,7 +127,7 @@ export default function MarketingDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           <h2 className="font-display text-lg font-semibold text-foreground">
-            AÃ§Ãµes RÃ¡pidas
+            Ações rápidas
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {quickActions.map((action) => (
@@ -158,7 +158,7 @@ export default function MarketingDashboard() {
 
         <div className="space-y-4">
           <h2 className="font-display text-lg font-semibold text-foreground">
-            Datas Importantes
+            Datas importantes
           </h2>
           <Card className="bg-card border-border shadow-card">
             <CardContent className="p-0 divide-y divide-border">
@@ -186,10 +186,11 @@ export default function MarketingDashboard() {
             onClick={() => navigate("/chat")}
           >
             <Sparkles className="h-4 w-4 mr-2" />
-            Falar com IA
+            Conversar com a IA
           </Button>
         </div>
       </div>
     </div>
   );
 }
+

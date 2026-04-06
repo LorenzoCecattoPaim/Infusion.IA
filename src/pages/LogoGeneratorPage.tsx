@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Send, Sparkles, Zap, Download, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,10 +31,10 @@ interface Logo {
 }
 
 const STAGE_LABELS: Record<number, string> = {
-  0: "Coletando informaÃ§Ãµes da sua marca",
+  0: "Coletando informações da sua marca",
   1: "Definindo estilo e identidade visual",
   2: "Gerando logos personalizados",
-  3: "Refinando e criando variaÃ§Ãµes",
+  3: "Refinando e criando variações",
 };
 
 export default function LogoGeneratorPage() {
@@ -54,7 +54,7 @@ export default function LogoGeneratorPage() {
         id: "welcome",
         role: "assistant",
         content:
-          "OlÃ¡! Sou seu Designer de Logo IA. Vou criar um logo incrÃ­vel para sua marca!\n\nPrimeiro, preciso de algumas informaÃ§Ãµes:\n\n**Qual Ã© o nome completo da sua marca/empresa?**",
+          "Olá! Sou seu designer de logo com IA. Vou criar um logo incrível para a sua marca!\n\nPara começar, preciso de algumas informações:\n\n**Qual é o nome completo da sua marca/empresa?**",
         timestamp: new Date(),
       },
     ]);
@@ -76,7 +76,7 @@ export default function LogoGeneratorPage() {
     const res = await fetch(`${getFunctionsBaseUrl()}/functions/v1/logo-generator`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json; charset=UTF-8",
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(payload),
@@ -85,7 +85,7 @@ export default function LogoGeneratorPage() {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       if (res.status === 402) {
-        throw new Error("CrÃ©ditos insuficientes.");
+        throw new Error("Créditos insuficientes.");
       }
       throw new Error(err.error || "Erro ao processar.");
     }
@@ -133,7 +133,7 @@ export default function LogoGeneratorPage() {
       queryClient.invalidateQueries({ queryKey: ["credits"] });
       queryClient.invalidateQueries({ queryKey: ["user_summary"] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro de conexÃ£o.");
+      toast.error(err instanceof Error ? err.message : "Erro de conexão.");
     } finally {
       setLoading(false);
     }
@@ -144,7 +144,7 @@ export default function LogoGeneratorPage() {
     const actionMsg: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: "Gerar novas opÃ§Ãµes",
+      content: "Gerar novas opções",
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, actionMsg]);
@@ -218,7 +218,7 @@ export default function LogoGeneratorPage() {
       queryClient.invalidateQueries({ queryKey: ["credits"] });
       queryClient.invalidateQueries({ queryKey: ["user_summary"] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao gerar variaÃ§Ãµes.");
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar variações.");
     } finally {
       setLoading(false);
     }
@@ -246,14 +246,14 @@ export default function LogoGeneratorPage() {
           <div>
             <h1 className="font-display text-lg font-bold text-foreground flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              Criador de Logo IA
+              Criador de logo com IA
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
               {STAGE_LABELS[stage]}
             </p>
           </div>
           <Badge variant="outline" className="border-border text-muted-foreground">
-            <Zap className="h-3 w-3 mr-1" /> {credits} crÃ©ditos
+            <Zap className="h-3 w-3 mr-1" /> {credits} créditos
           </Badge>
         </header>
 
@@ -270,14 +270,14 @@ export default function LogoGeneratorPage() {
           {logos.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">OpÃ§Ãµes geradas</p>
+                <p className="text-xs text-muted-foreground">Opções geradas</p>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={handleGenerateNew}
                   disabled={loading}
                 >
-                  <RefreshCw className="h-3.5 w-3.5 mr-2" /> Gerar novas opÃ§Ãµes
+                  <RefreshCw className="h-3.5 w-3.5 mr-2" /> Gerar novas opções
                 </Button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -349,7 +349,7 @@ export default function LogoGeneratorPage() {
                   handleSend();
                 }
               }}
-              placeholder="Responda Ã s perguntas do designer..."
+              placeholder="Responda às perguntas do designer..."
               className="min-h-[44px] max-h-32 resize-none bg-secondary border-border text-foreground placeholder:text-muted-foreground"
               rows={1}
               disabled={loading}
@@ -364,7 +364,7 @@ export default function LogoGeneratorPage() {
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1.5">
-            Cada mensagem consome crÃ©ditos â€¢ Infusion.IA Logo Creator
+            Cada mensagem consome créditos • Infusion.IA Logo Creator
           </p>
         </div>
 
@@ -380,7 +380,7 @@ export default function LogoGeneratorPage() {
                 <div className="p-5 space-y-4">
                   <DialogHeader>
                     <DialogTitle className="font-display text-foreground">
-                      Detalhes do Logo
+                      Detalhes do logo
                     </DialogTitle>
                   </DialogHeader>
                   {previewLogo.description && (
@@ -408,3 +408,5 @@ export default function LogoGeneratorPage() {
     </DashboardLayout>
   );
 }
+
+

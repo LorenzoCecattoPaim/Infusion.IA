@@ -42,7 +42,7 @@ export async function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error("Falha ao ler arquivo"));
+    reader.onerror = () => reject(new Error("Não foi possível ler o arquivo."));
     reader.readAsText(file, "utf-8");
   });
 }
@@ -52,3 +52,4 @@ export function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+

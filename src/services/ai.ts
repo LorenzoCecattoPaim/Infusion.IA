@@ -40,7 +40,7 @@ export async function generatePosts(
   const res = await fetch(`${getBaseUrl()}/functions/v1/generate-posts`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": "application/json; charset=UTF-8",
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
@@ -66,7 +66,7 @@ export async function generateImage(payload: {
   const res = await fetch(`${getBaseUrl()}/functions/v1/generate-image`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": "application/json; charset=UTF-8",
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
@@ -80,3 +80,5 @@ export async function generateImage(payload: {
 
   return res.json();
 }
+
+

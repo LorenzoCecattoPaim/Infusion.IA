@@ -1,5 +1,5 @@
-﻿// supabase/functions/_shared/agents.ts
-// UtilitÃ¡rio central de agentes de IA â€” zero dependÃªncia de serviÃ§os externos nÃ£o configurados
+// supabase/functions/_shared/agents.ts
+// Utilitário central de agentes de IA — zero dependência de serviços externos não configurados
 
 const AI_API_BASE = "https://api.openai.com/v1";
 
@@ -7,7 +7,7 @@ function getApiKey(): string {
   return Deno.env.get("AI_API_KEY") || Deno.env.get("OPENAI_API_KEY") || "";
 }
 
-// â”€â”€â”€ SYSTEM PROMPTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- SYSTEM PROMPTS ------------------------------------------------------------
 
 export const AGENTE_1_CONSULTOR_MARKETING = `Você é um Consultor de Marketing que atende Pequenas e Médias Empresas Brasileiras.
 
@@ -29,17 +29,17 @@ ESTRUTURA:
 COMPORTAMENTO:
 
 - Fazer o máximo de perguntas antes de responder
-- Após resposta → oferecer aprofundamento
+- Após a resposta → oferecer aprofundamento
 
 APROFUNDAMENTO:
 
 - Sempre gerar plano prático passo a passo`;
 
-export const AGENTE_2_DESIGNER_LOGO = `Você é um Designer gráfico Criador de Logotipo que atende Pequenas e Médias Empresas Brasileiras.
+export const AGENTE_2_DESIGNER_LOGO = `Você é um designer gráfico, criador de logotipos, que atende Pequenas e Médias Empresas Brasileiras.
 
-Seu foco principal é organizar a Criação do Logotipo e Identidade da Marca (criação da identidade da marca, escolha das cores mais adequadas, estilo tipográfico e estilo de design mediante coleta das informações fornecidas pelo cliente) e, em seguida, organizar as CRIAR O LOGOTIPO (criação da imagem de logotipo, criação de logotipo escrito, criação de versão prata metalizada do logotipo, criação de versão dourada metalizada do logotipo, criação de versão preto e branco do logotipo).
+Seu foco principal é estruturar a criação do logotipo e da identidade da marca (identidade visual, escolha das cores mais adequadas, estilo tipográfico e direção de design com base nas informações fornecidas pelo cliente) e, em seguida, organizar a criação do logotipo (logo principal, logo escrito, versão prata metalizada, versão dourada metalizada e versões em preto e branco).
 
-Você deve questionar as perguntas abaixo antes de apresentar a identidade da marca e os logotipos criados. Depois de coletar os dados, você entregará uma SUGESTÃO DE TRÊS LOGOTIPOS.
+Você deve fazer as perguntas abaixo antes de apresentar a identidade da marca e os logotipos criados. Depois de coletar os dados, você entregará uma SUGESTÃO DE TRÊS LOGOTIPOS.
 
 REGRAS DE ESTILO:
 
@@ -47,7 +47,7 @@ REGRAS DE ESTILO:
 - Sempre sugerir exemplos de mercado.
 - Sempre perguntar o ESTILO DA MARCA:
   “tradicional/séria”, “jovem/descontraída”, “minimalista/futurista” ou “maximalista/sensorial”.
-- Após isso, perguntar as CORES ou oferecer escolher automaticamente.
+- Depois disso, pergunte sobre as CORES ou ofereça escolher automaticamente.
 
 REGRAS IMPORTANTES:
 
@@ -58,7 +58,7 @@ REGRAS IMPORTANTES:
 
 INTERAÇÃO:
 
-- Perguntar qual o usuário gostou
+- Perguntar de qual opção o usuário gostou
 - Se não gostar → gerar novas opções
 - Se gostar → gerar automaticamente:
   - versão prata
@@ -103,36 +103,36 @@ FORMATO DE RESPOSTA (JSON válido):
 
 ANTES DE CRIAR: Se faltar informação essencial, faça até 3 perguntas objetivas. Se tiver informações suficientes, crie imediatamente.`;
 
-export const AGENTE_4_OTIMIZADOR_PROMPT = `VocÃª Ã© um *Especialista em Engenharia de Prompts para GeraÃ§Ã£o de Imagens com IA*, com profundo conhecimento em Leonardo AI e Stable Diffusion.
+export const AGENTE_4_OTIMIZADOR_PROMPT = `Você é um *Especialista em Engenharia de Prompts para Geração de Imagens com IA*, com profundo conhecimento em Leonardo AI e Stable Diffusion.
 
-REGRAS DE OTIMIZAÃ‡ÃƒO:
+REGRAS DE OTIMIZAÇÃO:
 - Gere DOIS prompts distintos com abordagens visuais diferentes para o mesmo conceito.
-- Cada prompt deve ter entre 50 e 150 palavras em inglÃªs.
-- Inclua: estilo artÃ­stico, iluminaÃ§Ã£o, Ã¢ngulo, paleta de cores, qualidade tÃ©cnica, ambiente/cenÃ¡rio.
+- Cada prompt deve ter entre 50 e 150 palavras em inglês.
+- Inclua: estilo artístico, iluminação, ângulo, paleta de cores, qualidade técnica, ambiente/cenário.
 - Para logos: "vector art", "clean design", "minimalist", "scalable", "professional logo".
 - Para fotos de produto: "product photography", "white background", "commercial", "sharp focus".
-- Para conteÃºdo social: "social media post", "vibrant colors", "eye-catching", "marketing material".
+- Para conteúdo social: "social media post", "vibrant colors", "eye-catching", "marketing material".
 - O negative_prompt deve listar elementos a evitar.
-- Adapte o estilo ao segmento do negÃ³cio informado no contexto.
+- Adapte o estilo ao segmento do negócio informado no contexto.
 
-RESPONDA APENAS EM JSON VÃLIDO, sem markdown, sem explicaÃ§Ãµes fora do JSON:
+RESPONDA APENAS EM JSON VÁLIDO, sem markdown, sem explicações fora do JSON:
 {
-  "prompt_1": "Primeiro prompt otimizado em inglÃªs",
+  "prompt_1": "Primeiro prompt otimizado em inglês",
   "prompt_2": "Segundo prompt com abordagem visual diferente",
   "negative_prompt": "blurry, low quality, distorted, watermark, text errors, extra limbs, ugly, deformed",
-  "style_notes": "Breve explicaÃ§Ã£o das escolhas em portuguÃªs"
+  "style_notes": "Breve explicação das escolhas em português"
 }`;
 
-export const AGENTE_5_VALIDADOR = `VocÃª Ã© um *Validador de ConteÃºdo e SeguranÃ§a* para uma plataforma de marketing para empresas brasileiras.
+export const AGENTE_5_VALIDADOR = `Você é um *Validador de Conteúdo e Segurança* para uma plataforma de marketing para empresas brasileiras.
 
-CRITÃ‰RIOS DE VALIDAÃ‡ÃƒO:
-1. SEGURANÃ‡A: Nenhum conteÃºdo que promova violÃªncia, discriminaÃ§Ã£o, conteÃºdo adulto, ilegal ou prejudicial.
-2. Ã‰TICA: Nenhuma promessa enganosa, publicidade abusiva ou afirmaÃ§Ãµes que causem danos ao consumidor.
-3. RELEVÃ‚NCIA: Deve ser relacionado a marketing e negÃ³cios legÃ­timos.
-4. QUALIDADE: Deve ser coerente e Ãºtil.
-5. PRIVACIDADE: Nenhuma solicitaÃ§Ã£o de dados pessoais sensÃ­veis.
+CRITÉRIOS DE VALIDAÇÃO:
+1. SEGURANÇA: Nenhum conteúdo que promova violência, discriminação, conteúdo adulto, ilegal ou prejudicial.
+2. ÉTICA: Nenhuma promessa enganosa, publicidade abusiva ou afirmações que causem danos ao consumidor.
+3. RELEVNCIA: Deve ser relacionado a marketing e negócios legítimos.
+4. QUALIDADE: Deve ser coerente e útil.
+5. PRIVACIDADE: Nenhuma solicitação de dados pessoais sensíveis.
 
-RESPONDA APENAS EM JSON VÃLIDO:
+RESPONDA APENAS EM JSON VÁLIDO:
 {
   "aprovado": true,
   "score": 95,
@@ -141,9 +141,9 @@ RESPONDA APENAS EM JSON VÃLIDO:
   "motivo_rejeicao": null
 }
 
-Se aprovado = false, preencha motivo_rejeicao. Score de 0-100. ConteÃºdo de marketing legÃ­timo deve sempre ser aprovado.`;
+Se aprovado = false, preencha motivo_rejeicao. Score de 0-100. Conteúdo de marketing legítimo deve sempre ser aprovado.`;
 
-// â”€â”€â”€ TIPOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- TIPOS ---------------------------------------------------------------------
 
 export interface AgentMessage {
   role: "system" | "user" | "assistant";
@@ -168,7 +168,7 @@ export interface ValidationResult {
   motivo_rejeicao?: string | null;
 }
 
-// â”€â”€â”€ FUNÃ‡Ã•ES PRINCIPAIS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- FUNÇÕES PRINCIPAIS --------------------------------------------------------
 
 /**
  * Chama a API de IA com system prompt e mensagens.
@@ -189,7 +189,7 @@ export async function callAgent(
 
   const apiKey = getApiKey();
   if (!apiKey) {
-    throw new Error("AI_API_KEY nÃ£o configurado nos secrets do Supabase.");
+    throw new Error("AI_API_KEY não configurado nos secrets do Supabase.");
   }
 
   const body: Record<string, unknown> = {
@@ -210,7 +210,7 @@ export async function callAgent(
   const response = await fetch(`${AI_API_BASE}/chat/completions`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": "application/json; charset=UTF-8",
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(body),
@@ -230,8 +230,8 @@ export async function callAgent(
 }
 
 /**
- * Valida conteÃºdo usando o Agente 5.
- * Em caso de falha na validaÃ§Ã£o, aprova por padrÃ£o para nÃ£o bloquear o sistema.
+ * Valida conteúdo usando o Agente 5.
+ * Em caso de falha na validação, aprova por padrão para não bloquear o sistema.
  */
 export async function validateWithAgent(
   content: unknown
@@ -239,7 +239,7 @@ export async function validateWithAgent(
   const contentStr =
     typeof content === "string" ? content : JSON.stringify(content);
 
-  // ConteÃºdo muito curto â€” aprovado sem chamar API
+  // Conteúdo muito curto — aprovado sem chamar API
   if (contentStr.trim().length < 3) {
     return { ok: true, score: 90, problemas: [] };
   }
@@ -251,7 +251,7 @@ export async function validateWithAgent(
       messages: [
         {
           role: "user",
-          content: `Valide o seguinte conteÃºdo:\n\n${contentStr.substring(0, 2000)}`,
+          content: `Valide o seguinte conteúdo:\n\n${contentStr.substring(0, 2000)}`,
         },
       ],
       model,
@@ -269,18 +269,18 @@ export async function validateWithAgent(
       motivo_rejeicao: parsed.motivo_rejeicao ?? null,
     };
   } catch {
-    // Falha silenciosa â€” aprovado por padrÃ£o
+    // Falha silenciosa — aprovado por padrão
     return {
       ok: true,
       score: 80,
       problemas: [],
-      sugestoes: "ValidaÃ§Ã£o indisponÃ­vel",
+      sugestoes: "Validação indisponível",
     };
   }
 }
 
 /**
- * Renderiza system prompt com contexto do negÃ³cio injetado.
+ * Renderiza system prompt com contexto do negócio injetado.
  */
 export function renderBusinessPrompt(
   basePrompt: string,
@@ -292,39 +292,38 @@ export function renderBusinessPrompt(
   const segmento =
     (profile.segmento_atuacao as string) ||
     (profile.segmento as string) ||
-    "NÃ£o informado";
+    "Não informado";
   const objetivo =
     (profile.objetivo_principal as string) ||
     (profile.objetivos_marketing as string) ||
-    "NÃ£o informado";
-  const publico = (profile.publico_alvo as string) || "NÃ£o informado";
-  const tom = (profile.tom_comunicacao as string) || "NÃ£o informado";
+    "Não informado";
+  const publico = (profile.publico_alvo as string) || "Não informado";
+  const tom = (profile.tom_comunicacao as string) || "Não informado";
   const marca =
     (profile.marca_descricao as string) ||
     (profile.diferenciais as string) ||
-    "NÃ£o informado";
+    "Não informado";
   const canais =
-    ((profile.canais_atuacao as string[] | null) || (profile.redes_sociais as string[] | null))?.join(", ") ||
-    "NÃ£o informado";
+    ((profile.canais_atuacao as string[] | null) ||
+      (profile.redes_sociais as string[] | null))?.join(", ") || "Não informado";
   const conteudo =
-    (profile.tipo_conteudo as string[] | null)?.join(", ") ||
-    "NÃ£o informado";
-  const nivel = (profile.nivel_experiencia as string) || "NÃ£o informado";
+    (profile.tipo_conteudo as string[] | null)?.join(", ") || "Não informado";
+  const nivel = (profile.nivel_experiencia as string) || "Não informado";
   const desafio =
     (profile.maior_desafio as string) ||
     (profile.desafios as string) ||
-    "NÃ£o informado";
-  const usoIa = (profile.uso_ia as string) || "NÃ£o informado";
+    "Não informado";
+  const usoIa = (profile.uso_ia as string) || "Não informado";
 
   const profileLines = [
     `- Segmento: ${segmento}`,
     `- Objetivo: ${objetivo}`,
-    `- PÃºblico: ${publico}`,
+    `- Público: ${publico}`,
     `- Tom: ${tom}`,
     `- Marca: ${marca}`,
     `- Canais: ${canais}`,
-    `- ConteÃºdo: ${conteudo}`,
-    `- NÃ­vel: ${nivel}`,
+    `- Conteúdo: ${conteudo}`,
+    `- Nível: ${nivel}`,
     `- Desafio: ${desafio}`,
     `- Uso da IA: ${usoIa}`,
   ].join("\n");
@@ -353,7 +352,7 @@ export function safeParseJSON<T>(text: string, fallback: T): T {
 }
 
 /**
- * Headers CORS padrÃ£o para todas as Edge Functions.
+ * Headers CORS padrão para todas as Edge Functions.
  */
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -365,15 +364,9 @@ export const corsHeaders = {
 /**
  * Retorna Response de erro com headers CORS.
  */
-export function errorResponse(
-  message: string,
-  status: number
-): Response {
+export function errorResponse(message: string, status: number): Response {
   return new Response(JSON.stringify({ error: message }), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" },
   });
 }
-
-
-

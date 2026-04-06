@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Sparkles,
   Loader2,
@@ -72,7 +72,7 @@ export default function ImageGeneratorPage() {
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type": "application/json; charset=UTF-8",
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ prompt, quality, template: selectedTemplate }),
@@ -81,7 +81,7 @@ export default function ImageGeneratorPage() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        if (res.status === 402) throw new Error("CrÃ©ditos insuficientes.");
+        if (res.status === 402) throw new Error("Créditos insuficientes.");
         throw new Error(err.error || "Erro ao gerar imagem.");
       }
 
@@ -104,12 +104,12 @@ export default function ImageGeneratorPage() {
 
   const handleGenerate = () => {
     if (!prompt.trim()) {
-      toast.error("Descreva a imagem que vocÃª quer criar.");
+      toast.error("Descreva a imagem que você quer criar.");
       return;
     }
     const cost = quality === "premium" ? 10 : 5;
     if (credits < cost) {
-      toast.error(`CrÃ©ditos insuficientes. NecessÃ¡rio: ${cost}, DisponÃ­vel: ${credits}`);
+      toast.error(`Créditos insuficientes. Necessário: ${cost}, disponível: ${credits}`);
       return;
     }
     setSelectionResult(null);
@@ -146,7 +146,7 @@ export default function ImageGeneratorPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="font-display text-lg font-bold text-foreground">
-                  Gerador de Imagens
+                  Gerador de imagens
                 </h1>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Crie imagens profissionais com IA
@@ -161,7 +161,7 @@ export default function ImageGeneratorPage() {
                 }
               >
                 <Zap className="h-3 w-3 mr-1" />
-                {credits} crÃ©ditos
+                {credits} créditos
               </Badge>
             </div>
 
@@ -173,7 +173,7 @@ export default function ImageGeneratorPage() {
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Ex: Logo minimalista para cafeteria artesanal, tons terrosos, estilo moderno..."
+                placeholder="Ex.: foto de produto minimalista, fundo claro, estilo moderno..."
                 className="w-full min-h-[120px] bg-secondary border border-border rounded-2xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none outline-none focus:border-primary/50 transition-colors"
                 maxLength={2000}
               />
@@ -182,10 +182,10 @@ export default function ImageGeneratorPage() {
               </p>
             </div>
 
-            {/* Templates */}
+            {/* Modelos */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
-                Templates
+                Modelos
               </label>
               <div className="flex flex-wrap gap-2">
                 {templates.map((t) => (
@@ -218,17 +218,17 @@ export default function ImageGeneratorPage() {
                 {[
                   {
                     id: "standard",
-                    label: "PadrÃ£o",
+                    label: "Padrão",
                     icon: Zap,
                     cost: 5,
-                    desc: "RÃ¡pido e eficiente",
+                    desc: "Rápido e eficiente",
                   },
                   {
                     id: "premium",
                     label: "Premium",
                     icon: Crown,
                     cost: 10,
-                    desc: "Alta resoluÃ§Ã£o",
+                    desc: "Alta resolução",
                   },
                 ].map((q) => (
                   <button
@@ -252,7 +252,7 @@ export default function ImageGeneratorPage() {
                     </p>
                     <p className="text-xs text-muted-foreground">{q.desc}</p>
                     <p className="text-xs font-bold text-primary mt-1">
-                      {q.cost} crÃ©ditos
+                      {q.cost} créditos
                     </p>
                   </button>
                 ))}
@@ -275,13 +275,13 @@ export default function ImageGeneratorPage() {
               ) : (
                 <>
                   <Sparkles className="h-4 w-4 mr-2" />
-                  Gerar Imagens â€”{" "}
-                  {quality === "premium" ? 10 : 5} crÃ©ditos
+                  Gerar imagens —{" "}
+                  {quality === "premium" ? 10 : 5} créditos
                 </>
               )}
             </Button>
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Ctrl+Enter para gerar rapidamente
+              Ctrl+Enter para gerar rápido
             </p>
           </div>
         </div>
@@ -295,7 +295,7 @@ export default function ImageGeneratorPage() {
           {selectionResult && selectionResult.length > 0 && (
             <div className="mb-6">
               <h3 className="text-sm font-semibold text-foreground mb-3">
-                Escolha uma variaÃ§Ã£o:
+                Escolha uma variação:
               </h3>
               <div className="grid grid-cols-2 gap-4">
                 {selectionResult.map((img, i) => (
@@ -306,12 +306,12 @@ export default function ImageGeneratorPage() {
                   >
                     <img
                       src={img.url}
-                      alt={`VariaÃ§Ã£o ${i + 1}`}
+                      alt={`Variação ${i + 1}`}
                       className="w-full aspect-square object-cover"
                     />
                     <div className="p-2 bg-card text-center border-t border-border">
                       <span className="text-xs text-muted-foreground">
-                        VariaÃ§Ã£o {i + 1}
+                        Variação {i + 1}
                       </span>
                     </div>
                   </div>
@@ -344,7 +344,7 @@ export default function ImageGeneratorPage() {
               <>
                 {!selectionResult && (
                   <p className="text-xs text-muted-foreground mb-4 font-medium uppercase tracking-wider">
-                    HistÃ³rico de imagens
+                    Histórico de imagens
                   </p>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -374,7 +374,7 @@ export default function ImageGeneratorPage() {
                           onClick={(e) => {
                             e.stopPropagation();
                             navigator.clipboard.writeText(img.prompt);
-                            toast.success("Prompt copiado!");
+                            toast.success("Prompt copiado.");
                           }}
                         >
                           <Copy className="h-4 w-4 text-white" />
@@ -393,7 +393,7 @@ export default function ImageGeneratorPage() {
                   Nenhuma imagem ainda
                 </h3>
                 <p className="text-sm text-muted-foreground max-w-xs">
-                  Descreva a imagem que vocÃª quer criar e clique em Gerar.
+                  Descreva a imagem que você quer criar e clique em Gerar imagens.
                 </p>
               </div>
             ))}
@@ -415,13 +415,13 @@ export default function ImageGeneratorPage() {
                 <div className="p-5 space-y-4">
                   <DialogHeader>
                     <DialogTitle className="font-display text-foreground">
-                      Detalhes da Imagem
+                      Detalhes da imagem
                     </DialogTitle>
                   </DialogHeader>
                   <div className="space-y-3">
                     <div>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                        Prompt Original
+                        Prompt original
                       </p>
                       <p className="text-sm text-foreground bg-secondary rounded-lg p-2">
                         {selectedImage.prompt}
@@ -430,7 +430,7 @@ export default function ImageGeneratorPage() {
                     {selectedImage.optimized_prompt && (
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                          Prompt Otimizado
+                          Prompt otimizado
                         </p>
                         <p className="text-sm text-foreground bg-secondary rounded-lg p-2">
                           {selectedImage.optimized_prompt}
@@ -440,7 +440,7 @@ export default function ImageGeneratorPage() {
                     {selectedImage.negative_prompt && (
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                          Negative Prompt
+                          Prompt negativo
                         </p>
                         <p className="text-sm text-foreground bg-secondary rounded-lg p-2">
                           {selectedImage.negative_prompt}
@@ -459,10 +459,10 @@ export default function ImageGeneratorPage() {
                       variant="outline"
                       onClick={() => {
                         navigator.clipboard.writeText(selectedImage.prompt);
-                        toast.success("Prompt copiado!");
+                        toast.success("Prompt copiado.");
                       }}
                     >
-                      <Copy className="h-4 w-4 mr-2" /> Copiar Prompt
+                      <Copy className="h-4 w-4 mr-2" /> Copiar prompt
                     </Button>
                   </div>
                 </div>
@@ -474,4 +474,6 @@ export default function ImageGeneratorPage() {
     </DashboardLayout>
   );
 }
+
+
 
