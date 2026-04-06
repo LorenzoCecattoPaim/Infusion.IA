@@ -11,12 +11,12 @@ import { Label } from "@/components/ui/label";
 export default function AuthPage() {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setE-mail] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleE-mailAuth = async (e: React.FormEvent) => {
+  const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
@@ -111,7 +111,7 @@ export default function AuthPage() {
             </div>
 
             {/* Form */}
-            <form onSubmit={handleE-mailAuth} className="space-y-4">
+            <form onSubmit={handleEmailAuth} className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-foreground">E-mail</Label>
                 <div className="relative">
@@ -121,7 +121,7 @@ export default function AuthPage() {
                     placeholder="seu@email.com"
                     className="pl-10 bg-secondary border-border"
                     value={email}
-                    onChange={(e) => setE-mail(e.target.value)}
+                    onChange={(e) => setEmail(e.target.value)}
                     required
                     autoComplete="email"
                   />
