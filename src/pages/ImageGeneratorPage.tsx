@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 import {
   Sparkles,
   Loader2,
@@ -81,7 +81,7 @@ export default function ImageGeneratorPage() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        if (res.status === 402) throw new Error("Créditos insuficientes.");
+        if (res.status === 402) throw new Error("CrÃ©ditos insuficientes.");
         throw new Error(err.error || "Erro ao gerar imagem.");
       }
 
@@ -94,6 +94,7 @@ export default function ImageGeneratorPage() {
       }
       queryClient.invalidateQueries({ queryKey: ["credits"] });
       queryClient.invalidateQueries({ queryKey: ["generated_images"] });
+      queryClient.invalidateQueries({ queryKey: ["user_summary"] });
       toast.success("Imagens geradas! Escolha sua favorita.");
     },
     onError: (err: Error) => {
@@ -103,12 +104,12 @@ export default function ImageGeneratorPage() {
 
   const handleGenerate = () => {
     if (!prompt.trim()) {
-      toast.error("Descreva a imagem que você quer criar.");
+      toast.error("Descreva a imagem que vocÃª quer criar.");
       return;
     }
-    const cost = quality === "premium" ? 6 : 3;
+    const cost = quality === "premium" ? 10 : 5;
     if (credits < cost) {
-      toast.error(`Créditos insuficientes. Necessário: ${cost}, Disponível: ${credits}`);
+      toast.error(`CrÃ©ditos insuficientes. NecessÃ¡rio: ${cost}, DisponÃ­vel: ${credits}`);
       return;
     }
     setSelectionResult(null);
@@ -160,7 +161,7 @@ export default function ImageGeneratorPage() {
                 }
               >
                 <Zap className="h-3 w-3 mr-1" />
-                {credits} créditos
+                {credits} crÃ©ditos
               </Badge>
             </div>
 
@@ -217,17 +218,17 @@ export default function ImageGeneratorPage() {
                 {[
                   {
                     id: "standard",
-                    label: "Padrão",
+                    label: "PadrÃ£o",
                     icon: Zap,
-                    cost: 3,
-                    desc: "Rápido e eficiente",
+                    cost: 5,
+                    desc: "RÃ¡pido e eficiente",
                   },
                   {
                     id: "premium",
                     label: "Premium",
                     icon: Crown,
-                    cost: 6,
-                    desc: "Alta resolução",
+                    cost: 10,
+                    desc: "Alta resoluÃ§Ã£o",
                   },
                 ].map((q) => (
                   <button
@@ -251,7 +252,7 @@ export default function ImageGeneratorPage() {
                     </p>
                     <p className="text-xs text-muted-foreground">{q.desc}</p>
                     <p className="text-xs font-bold text-primary mt-1">
-                      {q.cost} créditos
+                      {q.cost} crÃ©ditos
                     </p>
                   </button>
                 ))}
@@ -274,8 +275,8 @@ export default function ImageGeneratorPage() {
               ) : (
                 <>
                   <Sparkles className="h-4 w-4 mr-2" />
-                  Gerar Imagens —{" "}
-                  {quality === "premium" ? 6 : 3} créditos
+                  Gerar Imagens â€”{" "}
+                  {quality === "premium" ? 10 : 5} crÃ©ditos
                 </>
               )}
             </Button>
@@ -294,7 +295,7 @@ export default function ImageGeneratorPage() {
           {selectionResult && selectionResult.length > 0 && (
             <div className="mb-6">
               <h3 className="text-sm font-semibold text-foreground mb-3">
-                Escolha uma variação:
+                Escolha uma variaÃ§Ã£o:
               </h3>
               <div className="grid grid-cols-2 gap-4">
                 {selectionResult.map((img, i) => (
@@ -305,12 +306,12 @@ export default function ImageGeneratorPage() {
                   >
                     <img
                       src={img.url}
-                      alt={`Variação ${i + 1}`}
+                      alt={`VariaÃ§Ã£o ${i + 1}`}
                       className="w-full aspect-square object-cover"
                     />
                     <div className="p-2 bg-card text-center border-t border-border">
                       <span className="text-xs text-muted-foreground">
-                        Variação {i + 1}
+                        VariaÃ§Ã£o {i + 1}
                       </span>
                     </div>
                   </div>
@@ -343,7 +344,7 @@ export default function ImageGeneratorPage() {
               <>
                 {!selectionResult && (
                   <p className="text-xs text-muted-foreground mb-4 font-medium uppercase tracking-wider">
-                    Histórico de imagens
+                    HistÃ³rico de imagens
                   </p>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -392,7 +393,7 @@ export default function ImageGeneratorPage() {
                   Nenhuma imagem ainda
                 </h3>
                 <p className="text-sm text-muted-foreground max-w-xs">
-                  Descreva a imagem que você quer criar e clique em Gerar.
+                  Descreva a imagem que vocÃª quer criar e clique em Gerar.
                 </p>
               </div>
             ))}
@@ -473,3 +474,4 @@ export default function ImageGeneratorPage() {
     </DashboardLayout>
   );
 }
+

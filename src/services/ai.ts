@@ -11,25 +11,24 @@ function getBaseUrl(): string {
 }
 
 export interface GeneratePostsPayload {
-  brief: string;
-  tone?: string;
+  canal?: string;
+  objetivo: string;
+  tipo_conteudo: string;
+  brief?: string;
   channels?: string[];
-  cta?: string;
 }
 
 export interface GeneratedPost {
   canal: string;
-  titulo: string;
-  caption: string;
-  hashtags: string[];
+  objetivo?: string;
+  tipo_conteudo?: string;
+  texto_pronto: string;
   cta: string;
   sugestao_visual: string;
-  melhor_horario: string;
 }
 
 export interface GeneratePostsResponse {
   posts: GeneratedPost[];
-  dicas_extras: string;
 }
 
 export async function generatePosts(

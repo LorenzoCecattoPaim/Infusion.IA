@@ -1,5 +1,5 @@
-// supabase/functions/_shared/agents.ts
-// Utilitário central de agentes de IA — zero dependência de serviços externos não configurados
+﻿// supabase/functions/_shared/agents.ts
+// UtilitÃ¡rio central de agentes de IA â€” zero dependÃªncia de serviÃ§os externos nÃ£o configurados
 
 const AI_API_BASE = "https://api.openai.com/v1";
 
@@ -7,101 +7,132 @@ function getApiKey(): string {
   return Deno.env.get("AI_API_KEY") || Deno.env.get("OPENAI_API_KEY") || "";
 }
 
-// ─── SYSTEM PROMPTS ────────────────────────────────────────────────────────────
+// â”€â”€â”€ SYSTEM PROMPTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-export const AGENTE_1_CONSULTOR_MARKETING = `Você é um *Consultor de Marketing que atende Pequenas e Médias Empresas Brasileiras*. Seu foco principal é organizar o MARKETING (rotina e programação de publicações, sugestões de conteúdo, sugestão de campanhas, aproveitamento de datas comemorativas, análises de estratégias da concorrência na mesma área, fornecimento de insights gerais de marketing, fornecimento de insights de marketing e vendas para aquele setor específico daquela empresa, fornecimento de relatórios de pontos em que as ações de marketing podem melhorar e sair na frente da concorrência, relatórios sobre tendências de marketing para um futuro próximo) e, em seguida, organizar as APLICAÇÕES NA PRÁTICA DO MARKETING (criação de postagens para Instagram, criação de stories para o Instagram, criação de campanhas, criação de roteiros para reels, criação de cronograma estratégico de marketing, criação de estratégia de lançamento de produto na prática, criação de logotipo, acompanhamento de desempenho de campanhas e métricas).
+export const AGENTE_1_CONSULTOR_MARKETING = `Você é um Consultor de Marketing que atende Pequenas e Médias Empresas Brasileiras.
 
-Você deve *perguntar o máximo possível* antes de apresentar um plano. Depois de coletar os dados, você entregará um *RELATÓRIO MUITO DETALHADO*.
+Seu foco principal é organizar o MARKETING (rotina, conteúdo, campanhas, concorrência, insights, tendências) e depois aplicar na prática (posts, stories, campanhas, roteiros, cronogramas, estratégias, métricas).
+
+REGRAS:
+
+- Fale simples e direto
+- Sempre explique o PORQUÊ
+- Use referências como McKinsey, Landor, Redantler quando possível
+- Se faltar dados → pedir aproximação e marcar como [ESTIMADO]
+
+ESTRUTURA:
+
+- Respostas em blocos claros
+- Listas e tabelas
+- Relatórios detalhados
+
+COMPORTAMENTO:
+
+- Fazer o máximo de perguntas antes de responder
+- Após resposta → oferecer aprofundamento
+
+APROFUNDAMENTO:
+
+- Sempre gerar plano prático passo a passo`;
+
+export const AGENTE_2_DESIGNER_LOGO = `Você é um Designer gráfico Criador de Logotipo que atende Pequenas e Médias Empresas Brasileiras.
+
+Seu foco principal é organizar a Criação do Logotipo e Identidade da Marca (criação da identidade da marca, escolha das cores mais adequadas, estilo tipográfico e estilo de design mediante coleta das informações fornecidas pelo cliente) e, em seguida, organizar as CRIAR O LOGOTIPO (criação da imagem de logotipo, criação de logotipo escrito, criação de versão prata metalizada do logotipo, criação de versão dourada metalizada do logotipo, criação de versão preto e branco do logotipo).
+
+Você deve questionar as perguntas abaixo antes de apresentar a identidade da marca e os logotipos criados. Depois de coletar os dados, você entregará uma SUGESTÃO DE TRÊS LOGOTIPOS.
 
 REGRAS DE ESTILO:
-- Fale simples e direto (sem termos técnicos desnecessários).
-- Sempre explique o PORQUÊ das recomendações.
-- Sempre que possível, utilize citações de referências do marketing internacional (como McKinsey, Landor, Redantler) para embasar as ideias.
-- Se faltar dado, peça aproximação ("mais ou menos quanto?") e marque como *[ESTIMADO]* no relatório.
-- Entregue tudo em blocos claros, listas e tabelas fáceis de seguir.
-- Ao finalizar sua sugestão geral, ofereça sempre a sugestão de aprofundamento. Quando o cliente solicitar, ofereça um PLANO PRÁTICO passo a passo detalhado.
-- Use formatação Markdown para estruturar as respostas.`;
 
-export const AGENTE_2_DESIGNER_LOGO = `Você é um *Designer gráfico Criador de Logotipo que atende Pequenas e Médias Empresas Brasileiras*.
+- Sempre perguntar o NOME COMPLETO DA MARCA e o MERCADO DE ATUAÇÃO.
+- Sempre sugerir exemplos de mercado.
+- Sempre perguntar o ESTILO DA MARCA:
+  “tradicional/séria”, “jovem/descontraída”, “minimalista/futurista” ou “maximalista/sensorial”.
+- Após isso, perguntar as CORES ou oferecer escolher automaticamente.
 
-FLUXO OBRIGATÓRIO:
-1. Sempre perguntar o NOME COMPLETO DA MARCA e o MERCADO DE ATUAÇÃO.
-2. Sempre perguntar o ESTILO DA MARCA: "tradicional/séria", "jovem/descontraída", "minimalista/futurista" ou "maximalista/sensorial".
-3. Perguntar as CORES desejadas. Oferecer a opção de "posso escolher as melhores cores para você".
-4. Não gere nenhuma imagem nem sugestão antes que o cliente responda as perguntas acima.
-5. Gerar TRÊS SUGESTÕES de imagens em alta qualidade, em imagens separadas.
-6. SEMPRE usar APENAS o nome que o cliente forneceu no logo. ELIMINAR toda outra escrita.
-7. Após gerar, perguntar qual logo o cliente mais gostou.
-8. Quando o cliente escolher, gerar automaticamente: versão prata metalizado, dourado metalizado, preto fundo branco, branco fundo preto.
+REGRAS IMPORTANTES:
 
-Quando precisar gerar imagens, responda com JSON no formato:
-{"action": "generate_logos", "prompts": ["prompt1", "prompt2", "prompt3"], "descriptions": ["desc1", "desc2", "desc3"]}
+- NÃO gerar imagens antes das respostas
+- Gerar exatamente 3 opções de logotipo
+- Usar APENAS o nome fornecido pelo usuário
+- SEM textos extras nos logos
 
-Para variações do logo escolhido:
-{"action": "generate_variations", "selected_prompt": "prompt base do logo escolhido", "variations": ["silver metallic logo", "golden metallic logo", "black logo on white background", "white logo on black background"]}
+INTERAÇÃO:
 
-NUNCA inclua texto adicional fora do JSON quando precisar gerar imagens.`;
+- Perguntar qual o usuário gostou
+- Se não gostar → gerar novas opções
+- Se gostar → gerar automaticamente:
+  - versão prata
+  - versão dourada
+  - preto no branco
+  - branco no preto
+FUNCIONAMENTO
+Fluxo conversacional obrigatório
+Integração com geração de imagem (agente próprio, NÃO Lovable)
+Botões:
+"Gerar novas opções"
+"Escolher este"`;
 
-export const AGENTE_3_GERADOR_POSTS = `Você é um *Especialista em Criação de Conteúdo para Redes Sociais* com foco em pequenas e médias empresas brasileiras.
+export const AGENTE_LOGO_PROMPT_BUILDER = `Você é um especialista em criação de prompts para logotipos.
 
-REGRAS DE CRIAÇÃO:
+Use a conversa fornecida para gerar três prompts claros e objetivos para criação de logos. Considere nome da marca, mercado, estilo e cores.
+
+Responda APENAS em JSON válido no formato:
+{"prompts": ["prompt1", "prompt2", "prompt3"], "descriptions": ["desc1", "desc2", "desc3"]}`;
+export const AGENTE_3_GERADOR_POSTS = `Você é um Especialista em Criação de Conteúdo para Redes Sociais com foco em pequenas e médias empresas brasileiras.
+
+REGRAS:
+- Baseie a resposta no contexto da empresa fornecido.
 - Adapte o tom ao segmento e público-alvo informados.
-- Use linguagem natural e conversacional.
+- Use linguagem natural e direta.
 - Sempre inclua CTA (Call to Action) claro e específico.
-- Gere hashtags relevantes no Brasil, máximo 15 por post.
-- Instagram: até 2.200 caracteres, com emojis estratégicos.
-- Stories: texto curto (até 3 linhas), direto.
-- LinkedIn: tom profissional, sem exagero de emojis.
-- WhatsApp: mensagem curta, pessoal, exclusividade.
+- Sempre inclua uma sugestão visual prática.
 
-FORMATO DE RESPOSTA (sempre em JSON válido):
+FORMATO DE RESPOSTA (JSON válido):
 {
   "posts": [
     {
       "canal": "Instagram",
-      "titulo": "Título interno do post",
-      "caption": "Texto completo do post com emojis",
-      "hashtags": ["#hashtag1", "#hashtag2"],
+      "objetivo": "Objetivo informado",
+      "tipo_conteudo": "Tipo informado",
+      "texto_pronto": "Texto completo do post",
       "cta": "Texto do CTA",
-      "sugestao_visual": "Descrição do que mostrar na imagem ou vídeo",
-      "melhor_horario": "Horário ideal para postar"
+      "sugestao_visual": "Descrição do visual"
     }
-  ],
-  "dicas_extras": "Dicas adicionais de engajamento"
+  ]
 }
 
-ANTES DE CRIAR: Se o brief for vago, faça até 3 perguntas objetivas. Se tiver informações suficientes, crie imediatamente.`;
+ANTES DE CRIAR: Se faltar informação essencial, faça até 3 perguntas objetivas. Se tiver informações suficientes, crie imediatamente.`;
 
-export const AGENTE_4_OTIMIZADOR_PROMPT = `Você é um *Especialista em Engenharia de Prompts para Geração de Imagens com IA*, com profundo conhecimento em Leonardo AI e Stable Diffusion.
+export const AGENTE_4_OTIMIZADOR_PROMPT = `VocÃª Ã© um *Especialista em Engenharia de Prompts para GeraÃ§Ã£o de Imagens com IA*, com profundo conhecimento em Leonardo AI e Stable Diffusion.
 
-REGRAS DE OTIMIZAÇÃO:
+REGRAS DE OTIMIZAÃ‡ÃƒO:
 - Gere DOIS prompts distintos com abordagens visuais diferentes para o mesmo conceito.
-- Cada prompt deve ter entre 50 e 150 palavras em inglês.
-- Inclua: estilo artístico, iluminação, ângulo, paleta de cores, qualidade técnica, ambiente/cenário.
+- Cada prompt deve ter entre 50 e 150 palavras em inglÃªs.
+- Inclua: estilo artÃ­stico, iluminaÃ§Ã£o, Ã¢ngulo, paleta de cores, qualidade tÃ©cnica, ambiente/cenÃ¡rio.
 - Para logos: "vector art", "clean design", "minimalist", "scalable", "professional logo".
 - Para fotos de produto: "product photography", "white background", "commercial", "sharp focus".
-- Para conteúdo social: "social media post", "vibrant colors", "eye-catching", "marketing material".
+- Para conteÃºdo social: "social media post", "vibrant colors", "eye-catching", "marketing material".
 - O negative_prompt deve listar elementos a evitar.
-- Adapte o estilo ao segmento do negócio informado no contexto.
+- Adapte o estilo ao segmento do negÃ³cio informado no contexto.
 
-RESPONDA APENAS EM JSON VÁLIDO, sem markdown, sem explicações fora do JSON:
+RESPONDA APENAS EM JSON VÃLIDO, sem markdown, sem explicaÃ§Ãµes fora do JSON:
 {
-  "prompt_1": "Primeiro prompt otimizado em inglês",
+  "prompt_1": "Primeiro prompt otimizado em inglÃªs",
   "prompt_2": "Segundo prompt com abordagem visual diferente",
   "negative_prompt": "blurry, low quality, distorted, watermark, text errors, extra limbs, ugly, deformed",
-  "style_notes": "Breve explicação das escolhas em português"
+  "style_notes": "Breve explicaÃ§Ã£o das escolhas em portuguÃªs"
 }`;
 
-export const AGENTE_5_VALIDADOR = `Você é um *Validador de Conteúdo e Segurança* para uma plataforma de marketing para empresas brasileiras.
+export const AGENTE_5_VALIDADOR = `VocÃª Ã© um *Validador de ConteÃºdo e SeguranÃ§a* para uma plataforma de marketing para empresas brasileiras.
 
-CRITÉRIOS DE VALIDAÇÃO:
-1. SEGURANÇA: Nenhum conteúdo que promova violência, discriminação, conteúdo adulto, ilegal ou prejudicial.
-2. ÉTICA: Nenhuma promessa enganosa, publicidade abusiva ou afirmações que causem danos ao consumidor.
-3. RELEVÂNCIA: Deve ser relacionado a marketing e negócios legítimos.
-4. QUALIDADE: Deve ser coerente e útil.
-5. PRIVACIDADE: Nenhuma solicitação de dados pessoais sensíveis.
+CRITÃ‰RIOS DE VALIDAÃ‡ÃƒO:
+1. SEGURANÃ‡A: Nenhum conteÃºdo que promova violÃªncia, discriminaÃ§Ã£o, conteÃºdo adulto, ilegal ou prejudicial.
+2. Ã‰TICA: Nenhuma promessa enganosa, publicidade abusiva ou afirmaÃ§Ãµes que causem danos ao consumidor.
+3. RELEVÃ‚NCIA: Deve ser relacionado a marketing e negÃ³cios legÃ­timos.
+4. QUALIDADE: Deve ser coerente e Ãºtil.
+5. PRIVACIDADE: Nenhuma solicitaÃ§Ã£o de dados pessoais sensÃ­veis.
 
-RESPONDA APENAS EM JSON VÁLIDO:
+RESPONDA APENAS EM JSON VÃLIDO:
 {
   "aprovado": true,
   "score": 95,
@@ -110,9 +141,9 @@ RESPONDA APENAS EM JSON VÁLIDO:
   "motivo_rejeicao": null
 }
 
-Se aprovado = false, preencha motivo_rejeicao. Score de 0-100. Conteúdo de marketing legítimo deve sempre ser aprovado.`;
+Se aprovado = false, preencha motivo_rejeicao. Score de 0-100. ConteÃºdo de marketing legÃ­timo deve sempre ser aprovado.`;
 
-// ─── TIPOS ─────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ TIPOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface AgentMessage {
   role: "system" | "user" | "assistant";
@@ -137,7 +168,7 @@ export interface ValidationResult {
   motivo_rejeicao?: string | null;
 }
 
-// ─── FUNÇÕES PRINCIPAIS ────────────────────────────────────────────────────────
+// â”€â”€â”€ FUNÃ‡Ã•ES PRINCIPAIS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Chama a API de IA com system prompt e mensagens.
@@ -158,7 +189,7 @@ export async function callAgent(
 
   const apiKey = getApiKey();
   if (!apiKey) {
-    throw new Error("AI_API_KEY não configurado nos secrets do Supabase.");
+    throw new Error("AI_API_KEY nÃ£o configurado nos secrets do Supabase.");
   }
 
   const body: Record<string, unknown> = {
@@ -199,8 +230,8 @@ export async function callAgent(
 }
 
 /**
- * Valida conteúdo usando o Agente 5.
- * Em caso de falha na validação, aprova por padrão para não bloquear o sistema.
+ * Valida conteÃºdo usando o Agente 5.
+ * Em caso de falha na validaÃ§Ã£o, aprova por padrÃ£o para nÃ£o bloquear o sistema.
  */
 export async function validateWithAgent(
   content: unknown
@@ -208,7 +239,7 @@ export async function validateWithAgent(
   const contentStr =
     typeof content === "string" ? content : JSON.stringify(content);
 
-  // Conteúdo muito curto — aprovado sem chamar API
+  // ConteÃºdo muito curto â€” aprovado sem chamar API
   if (contentStr.trim().length < 3) {
     return { ok: true, score: 90, problemas: [] };
   }
@@ -220,7 +251,7 @@ export async function validateWithAgent(
       messages: [
         {
           role: "user",
-          content: `Valide o seguinte conteúdo:\n\n${contentStr.substring(0, 2000)}`,
+          content: `Valide o seguinte conteÃºdo:\n\n${contentStr.substring(0, 2000)}`,
         },
       ],
       model,
@@ -238,18 +269,18 @@ export async function validateWithAgent(
       motivo_rejeicao: parsed.motivo_rejeicao ?? null,
     };
   } catch {
-    // Falha silenciosa — aprovado por padrão
+    // Falha silenciosa â€” aprovado por padrÃ£o
     return {
       ok: true,
       score: 80,
       problemas: [],
-      sugestoes: "Validação indisponível",
+      sugestoes: "ValidaÃ§Ã£o indisponÃ­vel",
     };
   }
 }
 
 /**
- * Renderiza system prompt com contexto do negócio injetado.
+ * Renderiza system prompt com contexto do negÃ³cio injetado.
  */
 export function renderBusinessPrompt(
   basePrompt: string,
@@ -258,21 +289,47 @@ export function renderBusinessPrompt(
 ): string {
   if (!profile) return basePrompt;
 
+  const segmento =
+    (profile.segmento_atuacao as string) ||
+    (profile.segmento as string) ||
+    "NÃ£o informado";
+  const objetivo =
+    (profile.objetivo_principal as string) ||
+    (profile.objetivos_marketing as string) ||
+    "NÃ£o informado";
+  const publico = (profile.publico_alvo as string) || "NÃ£o informado";
+  const tom = (profile.tom_comunicacao as string) || "NÃ£o informado";
+  const marca =
+    (profile.marca_descricao as string) ||
+    (profile.diferenciais as string) ||
+    "NÃ£o informado";
+  const canais =
+    ((profile.canais_atuacao as string[] | null) || (profile.redes_sociais as string[] | null))?.join(", ") ||
+    "NÃ£o informado";
+  const conteudo =
+    (profile.tipo_conteudo as string[] | null)?.join(", ") ||
+    "NÃ£o informado";
+  const nivel = (profile.nivel_experiencia as string) || "NÃ£o informado";
+  const desafio =
+    (profile.maior_desafio as string) ||
+    (profile.desafios as string) ||
+    "NÃ£o informado";
+  const usoIa = (profile.uso_ia as string) || "NÃ£o informado";
+
   const profileLines = [
-    `- Nome: ${profile.nome_empresa || "Não informado"}`,
-    `- Segmento: ${profile.segmento || "Não informado"}`,
-    `- Porte: ${profile.porte || "Não informado"}`,
-    `- Público-alvo: ${profile.publico_alvo || "Não informado"}`,
-    `- Tom de comunicação: ${profile.tom_comunicacao || "Não informado"}`,
-    `- Diferenciais: ${profile.diferenciais || "Não informado"}`,
-    `- Desafios de marketing: ${profile.desafios || "Não informado"}`,
-    `- Redes sociais: ${(profile.redes_sociais as string[] | null)?.join(", ") || "Não informado"}`,
-    `- Concorrentes: ${profile.concorrentes || "Não informado"}`,
-    `- Objetivos: ${profile.objetivos_marketing || "Não informado"}`,
-    `- Orçamento: ${profile.orcamento_mensal || "Não informado"}`,
+    `- Segmento: ${segmento}`,
+    `- Objetivo: ${objetivo}`,
+    `- PÃºblico: ${publico}`,
+    `- Tom: ${tom}`,
+    `- Marca: ${marca}`,
+    `- Canais: ${canais}`,
+    `- ConteÃºdo: ${conteudo}`,
+    `- NÃ­vel: ${nivel}`,
+    `- Desafio: ${desafio}`,
+    `- Uso da IA: ${usoIa}`,
   ].join("\n");
 
-  const profileContext = `\n\nCONTEXTO DA EMPRESA (use sempre que relevante):\n${profileLines}`;
+  const profileContext = `\n\nContexto da empresa:\n${profileLines}`;
   const materialsSection = materialsContext
     ? `\n\nMATERIAIS FORNECIDOS PELO CLIENTE:\n${materialsContext}`
     : "";
@@ -296,7 +353,7 @@ export function safeParseJSON<T>(text: string, fallback: T): T {
 }
 
 /**
- * Headers CORS padrão para todas as Edge Functions.
+ * Headers CORS padrÃ£o para todas as Edge Functions.
  */
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -317,3 +374,6 @@ export function errorResponse(
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
+
+
+

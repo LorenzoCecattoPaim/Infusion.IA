@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 import { Send, Sparkles, TrendingUp, Target, Calendar, BarChart2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import ChatMessage from "@/components/ChatMessage";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBusinessProfile } from "@/hooks/useBusinessProfile";
+import { useAuth } from "@/hooks/useAuth";
 import { buildRagContext } from "@/lib/rag";
 import { getFunctionsBaseUrl } from "@/lib/apiBase";
 import { toast } from "sonner";
@@ -18,17 +19,23 @@ interface Message {
   timestamp: Date;
 }
 
+interface ConversationSummary {
+  id: string;
+  title: string | null;
+  updated_at: string;
+}
+
 const suggestions = [
   {
-    text: "Crie um plano de marketing para meu negócio",
+    text: "Crie um plano de marketing para meu negÃ³cio",
     icon: TrendingUp,
   },
   {
-    text: "Quais são as melhores estratégias para redes sociais?",
+    text: "Quais sÃ£o as melhores estratÃ©gias para redes sociais?",
     icon: Target,
   },
   {
-    text: "Monte um calendário de conteúdo para o próximo mês",
+    text: "Monte um calendÃ¡rio de conteÃºdo para o prÃ³ximo mÃªs",
     icon: Calendar,
   },
   {
@@ -40,17 +47,17 @@ const suggestions = [
 const insights = [
   {
     title: "Engajamento no Instagram",
-    description: "Posts com perguntas geram 2x mais comentários",
+    description: "Posts com perguntas geram 2x mais comentÃ¡rios",
     icon: TrendingUp,
   },
   {
-    title: "Melhor horário para postar",
-    description: "Entre 18h e 21h para maior alcance orgânico",
+    title: "Melhor horÃ¡rio para postar",
+    description: "Entre 18h e 21h para maior alcance orgÃ¢nico",
     icon: Calendar,
   },
   {
-    title: "Tendência de conteúdo",
-    description: "Vídeos curtos têm 3x mais alcance que fotos",
+    title: "TendÃªncia de conteÃºdo",
+    description: "VÃ­deos curtos tÃªm 3x mais alcance que fotos",
     icon: BarChart2,
   },
   {
@@ -60,17 +67,90 @@ const insights = [
   },
 ];
 
+function buildTitle(text: string) {
+  const words = text.trim().split(/\s+/).slice(0, 6);
+  return words.join(" ");
+}
+
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { profile: businessProfile } = useBusinessProfile();
+  const { user } = useAuth();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchHistory();
+  }, [user]);
+
+  const fetchHistory = async () => {
+    const { data } = await supabase
+      .from("chat_conversations")
+      .select("id, title, updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(5);
+    setConversations((data || []) as ConversationSummary[]);
+  };
+
+  const loadConversation = async (id: string) => {
+    const { data } = await supabase
+      .from("chat_messages")
+      .select("id, role, content, created_at")
+      .eq("conversation_id", id)
+      .order("created_at", { ascending: true });
+
+    setActiveConversationId(id);
+    setMessages(
+      (data || []).map((m) => ({
+        id: m.id,
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        timestamp: new Date(m.created_at),
+      }))
+    );
+  };
+
+  const handleNewConversation = () => {
+    setActiveConversationId(null);
+    setMessages([]);
+  };
+
+  const createConversation = async (firstMessage: string) => {
+    if (!user) return null;
+    const title = buildTitle(firstMessage);
+    const { data } = await supabase
+      .from("chat_conversations")
+      .insert({ user_id: user.id, title })
+      .select("id")
+      .single();
+    if (data?.id) {
+      setActiveConversationId(data.id);
+    }
+    return data?.id || null;
+  };
+
+  const persistMessage = async (conversationId: string, role: "user" | "assistant", content: string) => {
+    if (!user) return;
+    await supabase.from("chat_messages").insert({
+      conversation_id: conversationId,
+      user_id: user.id,
+      role,
+      content,
+    });
+    await supabase
+      .from("chat_conversations")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", conversationId);
+  };
 
   const handleSend = async (text?: string) => {
     const userMessage = text ?? input.trim();
@@ -90,6 +170,14 @@ export default function ChatPage() {
     const enrichedMessage = userMessage + ragContext;
 
     try {
+      let conversationId = activeConversationId;
+      if (!conversationId) {
+        conversationId = await createConversation(userMessage);
+      }
+      if (conversationId) {
+        await persistMessage(conversationId, "user", userMessage);
+      }
+
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -119,7 +207,7 @@ export default function ChatPage() {
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         if (response.status === 402) {
-          toast.error("Créditos insuficientes. Compre mais créditos para continuar.");
+          toast.error("CrÃ©ditos insuficientes. Compre mais crÃ©ditos para continuar.");
         } else {
           toast.error(err.error || "Erro ao processar sua mensagem.");
         }
@@ -136,6 +224,7 @@ export default function ChatPage() {
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let finalContent = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -152,6 +241,7 @@ export default function ChatPage() {
               const parsed = JSON.parse(data);
               const chunk = parsed.choices?.[0]?.delta?.content || "";
               if (chunk) {
+                finalContent += chunk;
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantMsgId
@@ -166,8 +256,13 @@ export default function ChatPage() {
           }
         }
       }
+
+      if (conversationId) {
+        await persistMessage(conversationId, "assistant", finalContent);
+        await fetchHistory();
+      }
     } catch (err) {
-      toast.error("Erro de conexão. Verifique sua internet e tente novamente.");
+      toast.error("Erro de conexÃ£o. Verifique sua internet e tente novamente.");
     } finally {
       setIsLoading(false);
       queryClient.invalidateQueries({ queryKey: ["credits"] });
@@ -177,13 +272,37 @@ export default function ChatPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col h-[calc(100vh-3.5rem)]">
-        {/* Insights bar — visible only on empty state */}
+        {conversations.length > 0 && (
+          <div className="border-b border-border bg-card/50 p-4 shrink-0">
+            <div className="max-w-4xl mx-auto flex flex-wrap items-center gap-3 justify-between">
+              <div className="flex flex-wrap gap-2">
+                {conversations.map((conv) => (
+                  <button
+                    key={conv.id}
+                    onClick={() => loadConversation(conv.id)}
+                    className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                      activeConversationId === conv.id
+                        ? "border-primary/50 bg-primary/10 text-foreground"
+                        : "border-border bg-secondary/30 text-muted-foreground hover:border-primary/30"
+                    }`}
+                  >
+                    {conv.title || "Conversa"}
+                  </button>
+                ))}
+              </div>
+              <Button size="sm" variant="outline" onClick={handleNewConversation}>
+                Nova conversa
+              </Button>
+            </div>
+          </div>
+        )}
+
         {messages.length === 0 && (
           <div className="border-b border-border bg-card/50 p-4 shrink-0">
             <div className="max-w-4xl mx-auto">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5 text-primary" />
-                Últimos Insights
+                Ãšltimos Insights
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {insights.map((insight) => (
@@ -207,7 +326,6 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Messages area */}
         <div className="flex-1 overflow-y-auto p-6">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto text-center">
@@ -218,13 +336,11 @@ export default function ChatPage() {
                 Consultor de Marketing IA
               </h2>
               <p className="text-muted-foreground mb-2 max-w-md">
-                Seu consultor especializado em pequenas e médias empresas
-                brasileiras.
+                Seu consultor especializado em pequenas e mÃ©dias empresas brasileiras.
               </p>
               {businessProfile?.nome_empresa && (
                 <p className="text-xs text-primary mb-8">
-                  🏢 Contexto ativo: {businessProfile.nome_empresa} — perfil
-                  carregado
+                  Contexto ativo: {businessProfile.nome_empresa} â€” perfil carregado
                 </p>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
@@ -273,7 +389,6 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* Input area */}
         <div className="border-t border-border p-4 shrink-0">
           <div className="max-w-3xl mx-auto">
             <div className="bg-card border border-border rounded-2xl flex items-end gap-2 p-3 shadow-card focus-within:border-primary/50 focus-within:shadow-glow transition-all duration-200">
@@ -286,7 +401,7 @@ export default function ChatPage() {
                     handleSend();
                   }
                 }}
-                placeholder="Pergunte sobre estratégias de marketing, criação de conteúdo..."
+                placeholder="Pergunte sobre estratÃ©gias de marketing, criaÃ§Ã£o de conteÃºdo..."
                 className="flex-1 bg-transparent resize-none text-foreground placeholder:text-muted-foreground text-sm outline-none min-h-[40px] max-h-[120px] py-2 px-1"
                 rows={1}
                 disabled={isLoading}
@@ -301,8 +416,7 @@ export default function ChatPage() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Consultor de Marketing IA • Powered by Infusion.IA • 1 crédito
-              por mensagem
+              Consultor de Marketing IA â€¢ Powered by Infusion.IA â€¢ 1 crÃ©dito por mensagem
             </p>
           </div>
         </div>

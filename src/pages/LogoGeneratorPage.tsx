@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { Send, Sparkles, Zap, Download } from "lucide-react";
+﻿import { useState, useRef, useEffect } from "react";
+import { Send, Sparkles, Zap, Download, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,10 +31,10 @@ interface Logo {
 }
 
 const STAGE_LABELS: Record<number, string> = {
-  0: "Coletando informações da sua marca",
+  0: "Coletando informaÃ§Ãµes da sua marca",
   1: "Definindo estilo e identidade visual",
   2: "Gerando logos personalizados",
-  3: "Refinando e criando variações",
+  3: "Refinando e criando variaÃ§Ãµes",
 };
 
 export default function LogoGeneratorPage() {
@@ -48,14 +48,13 @@ export default function LogoGeneratorPage() {
   const queryClient = useQueryClient();
   const { credits } = useCredits();
 
-  // Auto-start with welcome message
   useEffect(() => {
     setMessages([
       {
         id: "welcome",
         role: "assistant",
         content:
-          "Olá! Sou seu Designer de Logo IA. Vou criar um logo incrível para sua marca! 🎨\n\nPrimeiro, preciso de algumas informações:\n\n**Qual é o nome completo da sua marca/empresa?**",
+          "OlÃ¡! Sou seu Designer de Logo IA. Vou criar um logo incrÃ­vel para sua marca!\n\nPrimeiro, preciso de algumas informaÃ§Ãµes:\n\n**Qual Ã© o nome completo da sua marca/empresa?**",
         timestamp: new Date(),
       },
     ]);
@@ -67,6 +66,32 @@ export default function LogoGeneratorPage() {
       behavior: "smooth",
     });
   }, [messages, logos]);
+
+  const callLogoApi = async (payload: Record<string, unknown>) => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    const res = await fetch(`${getFunctionsBaseUrl()}/functions/v1/logo-generator`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (res.status === 402) {
+        throw new Error("CrÃ©ditos insuficientes.");
+      }
+      throw new Error(err.error || "Erro ao processar.");
+    }
+
+    return res.json();
+  };
 
   const handleSend = async () => {
     const userMessage = input.trim();
@@ -83,40 +108,12 @@ export default function LogoGeneratorPage() {
     setLoading(true);
 
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
       const allMessages = [...messages, newMsg].map((m) => ({
         role: m.role,
         content: m.content,
       }));
 
-      const res = await fetch(
-        `${getFunctionsBaseUrl()}/functions/v1/logo-generator`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ messages: allMessages }),
-        }
-      );
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        if (res.status === 402) {
-          toast.error("Créditos insuficientes.");
-        } else {
-          toast.error(err.error || "Erro ao processar.");
-        }
-        setLoading(false);
-        return;
-      }
-
-      const data = await res.json();
+      const data = await callLogoApi({ messages: allMessages });
 
       setMessages((prev) => [
         ...prev,
@@ -134,27 +131,97 @@ export default function LogoGeneratorPage() {
       }
 
       queryClient.invalidateQueries({ queryKey: ["credits"] });
-    } catch {
-      toast.error("Erro de conexão.");
+      queryClient.invalidateQueries({ queryKey: ["user_summary"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro de conexÃ£o.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSelectLogo = (logo: Logo, index: number) => {
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        role: "user",
-        content: `Gostei do Logo ${index}. Pode criar as variações (prata, dourado, preto e branco)?`,
-        timestamp: new Date(),
-      },
-    ]);
-    setInput(
-      `Gostei do Logo ${index}. Pode criar as variações (prata, dourado, preto e branco)?`
-    );
-    handleSend();
+  const handleGenerateNew = async () => {
+    if (loading) return;
+    const actionMsg: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: "Gerar novas opÃ§Ãµes",
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, actionMsg]);
+    setLoading(true);
+
+    try {
+      const allMessages = [...messages, actionMsg].map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+      const data = await callLogoApi({
+        messages: allMessages,
+        action: "generate_logos",
+      });
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString() + "-ai",
+          role: "assistant",
+          content: data.message,
+          timestamp: new Date(),
+        },
+      ]);
+      if (data.logos?.length) {
+        setLogos(data.logos);
+        setStage(2);
+      }
+      queryClient.invalidateQueries({ queryKey: ["credits"] });
+      queryClient.invalidateQueries({ queryKey: ["user_summary"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar logos.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectLogo = async (logo: Logo) => {
+    if (loading) return;
+    const actionMsg: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: "Escolher este",
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, actionMsg]);
+    setLoading(true);
+
+    try {
+      const allMessages = [...messages, actionMsg].map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+      const data = await callLogoApi({
+        messages: allMessages,
+        action: "generate_variations",
+        selectedPrompt: logo.prompt,
+      });
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString() + "-ai",
+          role: "assistant",
+          content: data.message,
+          timestamp: new Date(),
+        },
+      ]);
+      if (data.logos?.length) {
+        setLogos(data.logos);
+        setStage(3);
+      }
+      queryClient.invalidateQueries({ queryKey: ["credits"] });
+      queryClient.invalidateQueries({ queryKey: ["user_summary"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar variaÃ§Ãµes.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDownloadLogo = async (logo: Logo) => {
@@ -175,7 +242,6 @@ export default function LogoGeneratorPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col h-[calc(100vh-4rem)] max-w-5xl mx-auto">
-        {/* Header */}
         <header className="p-4 border-b border-border flex items-center justify-between shrink-0">
           <div>
             <h1 className="font-display text-lg font-bold text-foreground flex items-center gap-2">
@@ -187,15 +253,11 @@ export default function LogoGeneratorPage() {
             </p>
           </div>
           <Badge variant="outline" className="border-border text-muted-foreground">
-            <Zap className="h-3 w-3 mr-1" /> {credits} créditos
+            <Zap className="h-3 w-3 mr-1" /> {credits} crÃ©ditos
           </Badge>
         </header>
 
-        {/* Messages + Logos */}
-        <div
-          ref={scrollRef}
-          className="flex-1 overflow-y-auto p-4 space-y-4"
-        >
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((msg) => (
             <ChatMessage
               key={msg.id}
@@ -206,44 +268,57 @@ export default function LogoGeneratorPage() {
           ))}
 
           {logos.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
-              {logos.map((logo, i) => (
-                <div
-                  key={i}
-                  className="bg-card border border-border rounded-xl overflow-hidden shadow-card"
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">OpÃ§Ãµes geradas</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleGenerateNew}
+                  disabled={loading}
                 >
-                  <img
-                    src={logo.url}
-                    alt={`Logo ${i + 1}`}
-                    className="w-full aspect-square object-contain p-4 cursor-pointer hover:opacity-90 transition-opacity bg-white"
-                    onClick={() => setPreviewLogo(logo)}
-                  />
-                  <div className="p-3 border-t border-border">
-                    {logo.description && (
-                      <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                        {logo.description}
-                      </p>
-                    )}
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        className="flex-1 gradient-primary text-primary-foreground text-xs hover:opacity-90"
-                        onClick={() => handleSelectLogo(logo, i + 1)}
-                      >
-                        Selecionar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="px-2"
-                        onClick={() => handleDownloadLogo(logo)}
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                      </Button>
+                  <RefreshCw className="h-3.5 w-3.5 mr-2" /> Gerar novas opÃ§Ãµes
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {logos.map((logo, i) => (
+                  <div
+                    key={i}
+                    className="bg-card border border-border rounded-xl overflow-hidden shadow-card"
+                  >
+                    <img
+                      src={logo.url}
+                      alt={`Logo ${i + 1}`}
+                      className="w-full aspect-square object-contain p-4 cursor-pointer hover:opacity-90 transition-opacity bg-white"
+                      onClick={() => setPreviewLogo(logo)}
+                    />
+                    <div className="p-3 border-t border-border">
+                      {logo.description && (
+                        <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                          {logo.description}
+                        </p>
+                      )}
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          className="flex-1 gradient-primary text-primary-foreground text-xs hover:opacity-90"
+                          onClick={() => handleSelectLogo(logo)}
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" /> Escolher este
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="px-2"
+                          onClick={() => handleDownloadLogo(logo)}
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
 
@@ -263,7 +338,6 @@ export default function LogoGeneratorPage() {
           )}
         </div>
 
-        {/* Input */}
         <div className="p-4 border-t border-border shrink-0">
           <div className="flex gap-2">
             <Textarea
@@ -275,7 +349,7 @@ export default function LogoGeneratorPage() {
                   handleSend();
                 }
               }}
-              placeholder="Descreva sua marca ou responda às perguntas..."
+              placeholder="Responda Ã s perguntas do designer..."
               className="min-h-[44px] max-h-32 resize-none bg-secondary border-border text-foreground placeholder:text-muted-foreground"
               rows={1}
               disabled={loading}
@@ -290,15 +364,11 @@ export default function LogoGeneratorPage() {
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1.5">
-            Cada mensagem consome créditos • Infusion.IA Logo Creator
+            Cada mensagem consome crÃ©ditos â€¢ Infusion.IA Logo Creator
           </p>
         </div>
 
-        {/* Preview dialog */}
-        <Dialog
-          open={!!previewLogo}
-          onOpenChange={() => setPreviewLogo(null)}
-        >
+        <Dialog open={!!previewLogo} onOpenChange={() => setPreviewLogo(null)}>
           <DialogContent className="max-w-3xl bg-card border-border rounded-2xl p-0 overflow-hidden">
             {previewLogo && (
               <>
@@ -325,10 +395,7 @@ export default function LogoGeneratorPage() {
                     >
                       <Download className="h-4 w-4 mr-2" /> Baixar
                     </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => setPreviewLogo(null)}
-                    >
+                    <Button variant="outline" onClick={() => setPreviewLogo(null)}>
                       Fechar
                     </Button>
                   </div>

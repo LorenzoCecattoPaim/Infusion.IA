@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+﻿import { useNavigate } from "react-router-dom";
 import {
   FileText,
   Image,
@@ -9,44 +9,42 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useCredits } from "@/hooks/useCredits";
-import { useGeneratedImages } from "@/hooks/useGeneratedImages";
+import { useDashboardStats } from "@/hooks/useDashboardStats";
 
 const upcomingDates = [
   { date: "01/05", label: "Dia do Trabalho", days: "em breve" },
-  { date: "11/05", label: "Dia das Mães", days: "em breve" },
+  { date: "11/05", label: "Dia das MÃ£es", days: "em breve" },
   { date: "12/06", label: "Dia dos Namorados", days: "em breve" },
-  { date: "12/10", label: "Dia das Crianças", days: "em breve" },
+  { date: "12/10", label: "Dia das CrianÃ§as", days: "em breve" },
   { date: "25/12", label: "Natal", days: "em breve" },
 ];
 
 export default function MarketingDashboard() {
   const navigate = useNavigate();
-  const { credits } = useCredits();
-  const { generatedImages } = useGeneratedImages();
+  const { summary } = useDashboardStats();
 
   const stats = [
     {
       label: "Posts criados",
-      value: "0",
+      value: String(summary?.posts_generated ?? 0),
       icon: FileText,
       color: "text-primary",
     },
     {
       label: "Imagens geradas",
-      value: String(generatedImages.length),
+      value: String(summary?.images_generated ?? 0),
       icon: Image,
       color: "text-accent",
     },
     {
       label: "Logos criados",
-      value: "0",
+      value: String(summary?.logos_generated ?? 0),
       icon: Sparkles,
       color: "text-primary",
     },
     {
-      label: "Créditos restantes",
-      value: String(credits),
+      label: "CrÃ©ditos restantes",
+      value: String(summary?.credits ?? 0),
       icon: Zap,
       color: "text-accent",
     },
@@ -55,10 +53,17 @@ export default function MarketingDashboard() {
   const quickActions = [
     {
       title: "Consultor de Marketing IA",
-      description: "Estratégias personalizadas para seu negócio",
+      description: "EstratÃ©gias personalizadas para seu negÃ³cio",
       icon: MessageSquare,
       route: "/chat",
       gradient: "gradient-primary",
+    },
+    {
+      title: "Gerar Posts",
+      description: "Crie textos prontos com CTA e sugestÃ£o visual",
+      icon: FileText,
+      route: "/gerar-posts",
+      gradient: "gradient-accent",
     },
     {
       title: "Gerar Imagem",
@@ -89,17 +94,15 @@ export default function MarketingDashboard() {
 
   return (
     <div className="p-6 space-y-8 max-w-7xl mx-auto">
-      {/* Header */}
       <div>
         <h1 className="font-display text-2xl font-bold text-foreground">
-          {greeting}! 👋
+          {greeting}!
         </h1>
         <p className="text-muted-foreground mt-1">
-          Seu hub de marketing está pronto para impulsionar suas vendas.
+          Seu hub de marketing estÃ¡ pronto para impulsionar suas vendas.
         </p>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
           <Card
@@ -122,10 +125,9 @@ export default function MarketingDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Quick actions */}
         <div className="lg:col-span-2 space-y-4">
           <h2 className="font-display text-lg font-semibold text-foreground">
-            Ações Rápidas
+            AÃ§Ãµes RÃ¡pidas
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {quickActions.map((action) => (
@@ -154,7 +156,6 @@ export default function MarketingDashboard() {
           </div>
         </div>
 
-        {/* Important dates */}
         <div className="space-y-4">
           <h2 className="font-display text-lg font-semibold text-foreground">
             Datas Importantes

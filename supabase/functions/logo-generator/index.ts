@@ -1,21 +1,23 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   AGENTE_2_DESIGNER_LOGO,
+  AGENTE_LOGO_PROMPT_BUILDER,
   callAgent,
   validateWithAgent,
   safeParseJSON,
+  renderBusinessPrompt,
   corsHeaders,
   errorResponse,
 } from "../_shared/agents.ts";
 import { log, logError } from "../_shared/monitoring.ts";
 
 const CREDIT_COST_PER_MESSAGE = 2;
-const CREDIT_COST_PER_IMAGE = 2;
+const CREDIT_COST_PER_IMAGE = 5;
 
 async function generateLogoWithLeonardo(prompt: string): Promise<string> {
   const apiKey = Deno.env.get("LEONARDO_API_KEY") || "";
-  if (!apiKey) throw new Error("LEONARDO_API_KEY não configurado.");
+  if (!apiKey) throw new Error("LEONARDO_API_KEY nÃ£o configurado.");
 
   const logoPrompt = `${prompt}, professional logo design, vector art style, clean lines, scalable, minimal background, high quality, crisp edges`;
   const negativePrompt =
@@ -49,7 +51,7 @@ async function generateLogoWithLeonardo(prompt: string): Promise<string> {
 
   const initData = await initRes.json();
   const generationId = initData.sdGenerationJob?.generationId;
-  if (!generationId) throw new Error("Leonardo: falha ao iniciar geração de logo");
+  if (!generationId) throw new Error("Leonardo: falha ao iniciar geraÃ§Ã£o de logo");
 
   for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 2000));
@@ -67,10 +69,23 @@ async function generateLogoWithLeonardo(prompt: string): Promise<string> {
     if (gen?.status === "COMPLETE") {
       return gen.generated_images?.[0]?.url;
     }
-    if (gen?.status === "FAILED") throw new Error("Leonardo: geração de logo falhou");
+    if (gen?.status === "FAILED") throw new Error("Leonardo: geraÃ§Ã£o de logo falhou");
   }
 
-  throw new Error("Leonardo: timeout na geração de logo");
+  throw new Error("Leonardo: timeout na geraÃ§Ã£o de logo");
+}
+
+async function buildLogoPrompts(conversation: string): Promise<{ prompts: string[]; descriptions: string[] }> {
+  const result = (await callAgent({
+    systemPrompt: AGENTE_LOGO_PROMPT_BUILDER,
+    messages: [{ role: "user", content: conversation }],
+    model: Deno.env.get("AI_MODEL_LOGO") || "gpt-4o",
+    responseFormat: "json_object",
+    maxTokens: 800,
+    temperature: 0.7,
+  })) as string;
+
+  return safeParseJSON(result, { prompts: [], descriptions: [] });
 }
 
 serve(async (req) => {
@@ -100,9 +115,9 @@ serve(async (req) => {
 
     userId = user.id;
 
-    const { messages } = await req.json();
+    const { messages, action, selectedPrompt } = await req.json();
     if (!Array.isArray(messages) || messages.length === 0) {
-      return errorResponse("messages é obrigatório", 400);
+      return errorResponse("messages Ã© obrigatÃ³rio", 400);
     }
 
     // Check credits
@@ -112,8 +127,135 @@ serve(async (req) => {
       .eq("user_id", user.id)
       .single();
 
-    if (!credits || credits.credits < CREDIT_COST_PER_MESSAGE) {
+    if (!credits || credits.credits < 1) {
       return errorResponse("insufficient_credits", 402);
+    }
+
+    // Fetch business profile for context
+    const { data: profile } = await supabase
+      .from("business_profiles")
+      .select(
+        "segmento, segmento_atuacao, objetivo_principal, publico_alvo, tom_comunicacao, marca_descricao, canais_atuacao, tipo_conteudo, nivel_experiencia, maior_desafio, uso_ia, contexto_json"
+      )
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (action === "generate_logos") {
+      const cost = 3 * CREDIT_COST_PER_IMAGE;
+      if (credits.credits < cost) {
+        return errorResponse("insufficient_credits", 402);
+      }
+
+      const conversationText = messages
+        .map((m: { role: string; content: string }) => `${m.role.toUpperCase()}: ${m.content}`)
+        .join("\n");
+
+      const promptSet = await buildLogoPrompts(conversationText);
+      const prompts = promptSet.prompts?.length ? promptSet.prompts.slice(0, 3) : [];
+      const descriptions = promptSet.descriptions?.length ? promptSet.descriptions.slice(0, 3) : [];
+
+      if (prompts.length < 3) {
+        return errorResponse("NÃ£o foi possÃ­vel gerar os prompts do logo.", 500);
+      }
+
+      const logoUrls = await Promise.all(prompts.map((p) => generateLogoWithLeonardo(p)));
+      const logos = logoUrls.map((url, i) => ({
+        url,
+        description: descriptions[i] || `Logo ${i + 1}`,
+        prompt: prompts[i],
+      }));
+
+      await supabase.from("generated_logos").insert(
+        logos.map((logo) => ({
+          user_id: user.id,
+          url: logo.url,
+          prompt: logo.prompt,
+          description: logo.description,
+          variation_type: "base",
+        }))
+      );
+
+      await supabase
+        .from("user_credits")
+        .update({
+          credits: credits.credits - cost,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", user.id);
+
+      log({
+        function: "logo-generator",
+        user_id: userId,
+        action: "generate_logos",
+        status: "success",
+        credits_used: cost,
+        duration_ms: Date.now() - startTime,
+      });
+
+      return new Response(
+        JSON.stringify({ message: "Aqui estÃ£o suas trÃªs sugestÃµes de logo! Qual delas vocÃª mais gostou?", logos }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (action === "generate_variations") {
+      if (!selectedPrompt) {
+        return errorResponse("selectedPrompt Ã© obrigatÃ³rio", 400);
+      }
+
+      const variations = [
+        "silver metallic logo",
+        "golden metallic logo",
+        "black logo on white background",
+        "white logo on black background",
+      ];
+
+      const cost = variations.length * CREDIT_COST_PER_IMAGE;
+      if (credits.credits < cost) {
+        return errorResponse("insufficient_credits", 402);
+      }
+
+      const variationPrompts = variations.map((v) => `${selectedPrompt}, ${v}`);
+      const logoUrls = await Promise.all(
+        variationPrompts.map((p) => generateLogoWithLeonardo(p))
+      );
+      const logos = logoUrls.map((url, i) => ({
+        url,
+        description: variations[i],
+        prompt: variationPrompts[i],
+      }));
+
+      await supabase.from("generated_logos").insert(
+        logos.map((logo) => ({
+          user_id: user.id,
+          url: logo.url,
+          prompt: logo.prompt,
+          description: logo.description,
+          variation_type: "variation",
+        }))
+      );
+
+      await supabase
+        .from("user_credits")
+        .update({
+          credits: credits.credits - cost,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", user.id);
+
+      log({
+        function: "logo-generator",
+        user_id: userId,
+        action: "generate_variations",
+        status: "success",
+        credits_used: cost,
+        duration_ms: Date.now() - startTime,
+      });
+
+      return new Response(
+        JSON.stringify({ message: "Aqui estÃ£o as variaÃ§Ãµes do seu logo!", logos }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Validate last user message
@@ -125,16 +267,21 @@ serve(async (req) => {
       const validation = await validateWithAgent(lastMsg.content);
       if (!validation.ok) {
         return errorResponse(
-          `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
+          `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
           400
         );
       }
     }
 
-    // Call Agent 2
+    const systemPrompt = renderBusinessPrompt(
+      AGENTE_2_DESIGNER_LOGO,
+      profile as Record<string, unknown> | null,
+      ""
+    );
+
     const model = Deno.env.get("AI_MODEL_LOGO") || "gpt-4o";
     const agentText = (await callAgent({
-      systemPrompt: AGENTE_2_DESIGNER_LOGO,
+      systemPrompt,
       messages: messages.map((m: { role: string; content: string }) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
@@ -144,68 +291,10 @@ serve(async (req) => {
       temperature: 0.8,
     })) as string;
 
-    // Check if agent wants to generate images
-    let logos: Array<{ url: string; description: string; prompt: string }> = [];
-    let responseText = agentText;
-    let imagesGenerated = 0;
-
-    const jsonMatch = agentText.match(/\{[\s\S]*?"action"[\s\S]*?\}/);
-    if (jsonMatch) {
-      const parsed = safeParseJSON<{
-        action: string;
-        prompts?: string[];
-        descriptions?: string[];
-        selected_prompt?: string;
-        variations?: string[];
-      }>(jsonMatch[0], { action: "none" });
-
-      if (
-        parsed.action === "generate_logos" &&
-        parsed.prompts?.length &&
-        credits.credits >= CREDIT_COST_PER_MESSAGE + parsed.prompts.length * CREDIT_COST_PER_IMAGE
-      ) {
-        const logoUrls = await Promise.all(
-          parsed.prompts.map((p) => generateLogoWithLeonardo(p))
-        );
-        logos = logoUrls.map((url, i) => ({
-          url,
-          description: parsed.descriptions?.[i] || `Logo ${i + 1}`,
-          prompt: parsed.prompts![i],
-        }));
-        responseText =
-          "Aqui estão suas três sugestões de logo! Qual delas você mais gostou? 😊";
-        imagesGenerated = parsed.prompts.length;
-      }
-
-      if (
-        parsed.action === "generate_variations" &&
-        parsed.selected_prompt &&
-        parsed.variations?.length
-      ) {
-        const variationPrompts = parsed.variations.map(
-          (v) => `${parsed.selected_prompt}, ${v}`
-        );
-        const logoUrls = await Promise.all(
-          variationPrompts.map((p) => generateLogoWithLeonardo(p))
-        );
-        logos = logoUrls.map((url, i) => ({
-          url,
-          description: parsed.variations![i] || `Variação ${i + 1}`,
-          prompt: variationPrompts[i],
-        }));
-        responseText = "Aqui estão as variações do seu logo! ✨ Baixe as que preferir.";
-        imagesGenerated = parsed.variations.length;
-      }
-    }
-
-    // Deduct credits
-    const creditsToDeduct =
-      CREDIT_COST_PER_MESSAGE + imagesGenerated * CREDIT_COST_PER_IMAGE;
-
     await supabase
       .from("user_credits")
       .update({
-        credits: credits.credits - creditsToDeduct,
+        credits: credits.credits - CREDIT_COST_PER_MESSAGE,
         updated_at: new Date().toISOString(),
       })
       .eq("user_id", user.id);
@@ -213,14 +302,14 @@ serve(async (req) => {
     log({
       function: "logo-generator",
       user_id: userId,
-      action: "generate",
+      action: "message",
       status: "success",
-      credits_used: creditsToDeduct,
+      credits_used: CREDIT_COST_PER_MESSAGE,
       duration_ms: Date.now() - startTime,
     });
 
     return new Response(
-      JSON.stringify({ message: responseText, logos }),
+      JSON.stringify({ message: agentText, logos: [] }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
@@ -231,4 +320,3 @@ serve(async (req) => {
     );
   }
 });
-

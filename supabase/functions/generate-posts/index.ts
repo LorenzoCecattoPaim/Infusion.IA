@@ -1,10 +1,11 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   AGENTE_3_GERADOR_POSTS,
   callAgent,
   validateWithAgent,
   safeParseJSON,
+  renderBusinessPrompt,
   corsHeaders,
   errorResponse,
 } from "../_shared/agents.ts";
@@ -39,14 +40,13 @@ serve(async (req) => {
 
     userId = user.id;
 
-    const {
-      brief,
-      tone = "profissional",
-      channels = ["Instagram"],
-      cta,
-    } = await req.json();
+    const body = await req.json();
+    const brief = body.brief || "";
+    const channels = body.channels || (body.canal ? [body.canal] : ["Instagram"]);
+    const objetivo = body.objetivo || "NÃ£o informado";
+    const tipoConteudo = body.tipo_conteudo || body.tipoConteudo || "NÃ£o informado";
 
-    if (!brief?.trim()) return errorResponse("brief é obrigatório", 400);
+    if (!channels?.length) return errorResponse("canal Ã© obrigatÃ³rio", 400);
 
     // Check credits
     const { data: credits } = await supabase
@@ -62,37 +62,41 @@ serve(async (req) => {
     // Fetch business profile for context
     const { data: profile } = await supabase
       .from("business_profiles")
-      .select("nome_empresa, segmento, publico_alvo, tom_comunicacao")
+      .select(
+        "segmento, segmento_atuacao, objetivo_principal, publico_alvo, tom_comunicacao, marca_descricao, canais_atuacao, tipo_conteudo, nivel_experiencia, maior_desafio, uso_ia, contexto_json"
+      )
       .eq("user_id", user.id)
       .maybeSingle();
 
-    // Validate brief
-    const validation = await validateWithAgent(brief);
+    // Validate inputs
+    const validation = await validateWithAgent(
+      [brief, objetivo, tipoConteudo, channels.join(", ")].join(" | ")
+    );
     if (!validation.ok) {
       return errorResponse(
-        `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
+        `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
         400
       );
     }
 
+    const systemPrompt = renderBusinessPrompt(
+      AGENTE_3_GERADOR_POSTS,
+      profile as Record<string, unknown> | null,
+      ""
+    );
+
     const userPrompt = `
-Crie posts para os seguintes canais: ${channels.join(", ")}.
+Canal: ${channels.join(", ")}
+Objetivo: ${objetivo}
+Tipo de conteÃºdo: ${tipoConteudo}
+Brief: ${brief || "NÃ£o informado"}
 
-BRIEFING: ${brief}
-TOM DE VOZ: ${tone}
-CTA DESEJADO: ${cta || "Não especificado"}
-${
-  profile
-    ? `EMPRESA: ${profile.nome_empresa || "Não informado"} | SEGMENTO: ${profile.segmento || "Não informado"} | PÚBLICO: ${profile.publico_alvo || "Não informado"} | TOM: ${profile.tom_comunicacao || tone}`
-    : ""
-}
-
-Gere um post completo para cada canal solicitado. Responda apenas com JSON válido.`.trim();
+Gere um post para cada canal solicitado. Responda apenas com JSON vÃ¡lido.`.trim();
 
     const model = Deno.env.get("AI_MODEL_MARKETING") || "gpt-4o";
 
     const result = (await callAgent({
-      systemPrompt: AGENTE_3_GERADOR_POSTS,
+      systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
       model,
       responseFormat: "json_object",
@@ -100,17 +104,33 @@ Gere um post completo para cada canal solicitado. Responda apenas com JSON váli
       temperature: 0.85,
     })) as string;
 
-    const parsed = safeParseJSON<{ posts: unknown[]; dicas_extras: string }>(
+    const parsed = safeParseJSON<{ posts: Array<Record<string, unknown>> }>(
       result,
-      { posts: [], dicas_extras: "" }
+      { posts: [] }
     );
 
     // Validate generated content
     const resultValidation = await validateWithAgent(result);
     if (!resultValidation.ok) {
       return errorResponse(
-        `Conteúdo gerado não permitido: ${resultValidation.motivo_rejeicao}`,
+        `ConteÃºdo gerado nÃ£o permitido: ${resultValidation.motivo_rejeicao}`,
         400
+      );
+    }
+
+    // Persist generated posts
+    if (parsed.posts?.length) {
+      await supabase.from("generated_posts").insert(
+        parsed.posts.map((post) => ({
+          user_id: user.id,
+          canal: String(post.canal || channels[0]),
+          objetivo: String(post.objetivo || objetivo),
+          tipo_conteudo: String(post.tipo_conteudo || tipoConteudo),
+          texto_pronto: String(post.texto_pronto || post.texto || ""),
+          cta: String(post.cta || ""),
+          sugestao_visual: String(post.sugestao_visual || ""),
+          payload_json: post,
+        }))
       );
     }
 
@@ -143,4 +163,3 @@ Gere um post completo para cada canal solicitado. Responda apenas com JSON váli
     );
   }
 });
-

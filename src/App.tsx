@@ -11,6 +11,7 @@ import ChatPage from "@/pages/ChatPage";
 import MeuNegocioPage from "@/pages/MeuNegocioPage";
 import ImageGeneratorPage from "@/pages/ImageGeneratorPage";
 import LogoGeneratorPage from "@/pages/LogoGeneratorPage";
+import PostGeneratorPage from "@/pages/PostGeneratorPage";
 import BibliotecaPage from "@/pages/BibliotecaPage";
 import ConfiguracoesPage from "@/pages/ConfiguracoesPage";
 import NotFound from "@/pages/NotFound";
@@ -28,7 +29,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider
-        defaultTheme="dark"
+        defaultTheme="light"
         storageKey="aimh-theme"
         enableSystem={false}
         disableTransitionOnChange
@@ -74,6 +75,14 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <LogoGeneratorPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/gerar-posts"
+                element={
+                  <ProtectedRoute>
+                    <PostGeneratorPage />
                   </ProtectedRoute>
                 }
               />

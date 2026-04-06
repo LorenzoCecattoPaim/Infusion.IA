@@ -1,4 +1,4 @@
-import {
+﻿import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   Briefcase,
+  FileText,
   Image,
   Sparkles,
   BookOpen,
@@ -30,11 +31,12 @@ import BuyCreditsDialog from "./BuyCreditsDialog";
 const NAV_ITEMS = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/chat", icon: MessageSquare, label: "Consultor IA" },
-  { to: "/meu-negocio", icon: Briefcase, label: "Meu Negócio" },
+  { to: "/meu-negocio", icon: Briefcase, label: "Meu NegÃ³cio" },
+  { to: "/gerar-posts", icon: FileText, label: "Gerar Posts" },
   { to: "/gerador", icon: Image, label: "Gerar Imagem" },
   { to: "/logo-generator", icon: Sparkles, label: "Criar Logo" },
   { to: "/biblioteca", icon: BookOpen, label: "Biblioteca" },
-  { to: "/configuracoes", icon: Settings, label: "Configurações" },
+  { to: "/configuracoes", icon: Settings, label: "ConfiguraÃ§Ãµes" },
 ];
 
 export default function AppSidebar() {
@@ -91,7 +93,7 @@ export default function AppSidebar() {
               }`}
             >
               <Zap className="h-3.5 w-3.5 shrink-0" />
-              <span>{credits} créditos</span>
+              <span>{credits} crÃ©ditos</span>
               <span className="ml-auto text-[10px] opacity-70">+ Comprar</span>
             </button>
           )}
