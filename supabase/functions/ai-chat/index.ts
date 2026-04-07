@@ -5,14 +5,13 @@ import {
   callAgent,
   validateWithAgent,
   renderBusinessPrompt,
-  corsHeaders,
-  errorResponse,
 } from "../_shared/agents.ts";
+import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 import { log, logError } from "../_shared/monitoring.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return optionsResponse();
   }
 
   const startTime = Date.now();
@@ -48,7 +47,12 @@ serve(async (req) => {
       return errorResponse("insufficient_credits", 402);
     }
 
-    const body = await req.json();
+    let body: { messages?: unknown; stream?: boolean; lastMessageOverride?: string };
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
     const { messages = [], stream = false, lastMessageOverride } = body;
 
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -100,7 +104,7 @@ serve(async (req) => {
       const validation = await validateWithAgent(lastUserMsg.content);
       if (!validation.ok) {
         return errorResponse(
-          `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
+          `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
           400
         );
       }
@@ -160,14 +164,9 @@ serve(async (req) => {
       duration_ms: Date.now() - startTime,
     });
 
-    return new Response(
-      JSON.stringify({
-        choices: [{ message: { role: "assistant", content: text } }],
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" },
-      }
-    );
+    return jsonResponse({
+      choices: [{ message: { role: "assistant", content: text } }],
+    });
   } catch (err) {
     logError("ai-chat", userId, err);
     return errorResponse(
@@ -176,6 +175,3 @@ serve(async (req) => {
     );
   }
 });
-
-
-

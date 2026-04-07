@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, errorResponse } from "../_shared/agents.ts";
+import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 
 const PLANS: Record<string, { label: string; credits_monthly: number; amount_cents: number }> = {
   free: { label: "Gratuito", credits_monthly: 30, amount_cents: 0 },
@@ -11,7 +11,7 @@ const PLANS: Record<string, { label: string; credits_monthly: number; amount_cen
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return optionsResponse();
   }
 
   try {
@@ -27,9 +27,15 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) return errorResponse("Unauthorized", 401);
 
-    const { plan } = await req.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
+    const { plan } = body as { plan?: string };
     const planConfig = PLANS[plan];
-    if (!planConfig) return errorResponse("Plano inválido", 400);
+    if (!planConfig) return errorResponse("Plano invÃ¡lido", 400);
 
     if (planConfig.amount_cents === 0) {
       // Downgrade to free
@@ -38,10 +44,7 @@ serve(async (req) => {
         .update({ plan: "free", updated_at: new Date().toISOString() })
         .eq("user_id", user.id);
 
-      return new Response(
-        JSON.stringify({ success: true, plan: "free" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
-      );
+      return jsonResponse({ success: true, plan: "free" });
     }
 
     const pagarmeKey = Deno.env.get("PAGARME_API_KEY") || "";
@@ -57,10 +60,7 @@ serve(async (req) => {
         })
         .eq("user_id", user.id);
 
-      return new Response(
-        JSON.stringify({ success: true, plan, dev_mode: true }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
-      );
+      return jsonResponse({ success: true, plan, dev_mode: true });
     }
 
     // Create subscription via Pagar.me
@@ -93,15 +93,9 @@ serve(async (req) => {
       .update({ plan, updated_at: new Date().toISOString() })
       .eq("user_id", user.id);
 
-    return new Response(
-      JSON.stringify({ success: true, plan, subscription_id: pagarmeData.id }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
-    );
+    return jsonResponse({ success: true, plan, subscription_id: pagarmeData.id });
   } catch (err) {
     console.error("upgrade-plan error:", err);
     return errorResponse(String(err), 500);
   }
 });
-
-
-

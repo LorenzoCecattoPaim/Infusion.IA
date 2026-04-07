@@ -1,10 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, errorResponse } from "../_shared/agents.ts";
+import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return optionsResponse();
   }
 
   try {
@@ -13,7 +13,12 @@ serve(async (req) => {
       Deno.env.get("SERVICE_ROLE_KEY")!
     );
 
-    const body = await req.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
     console.log("Webhook recebido:", JSON.stringify(body));
 
     // Pagar.me webhook format
@@ -67,7 +72,7 @@ serve(async (req) => {
       }
 
       console.log(
-        `Créditos adicionados: user=${user_id}, credits=${credits}, order=${order_id}`
+        `CrÃ©ditos adicionados: user=${user_id}, credits=${credits}, order=${order_id}`
       );
     }
 
@@ -77,9 +82,9 @@ serve(async (req) => {
     });
   } catch (err) {
     console.error("webhook-pagamento error:", err);
-    // Always return 200 to prevent gateway retries on our bugs
-    return new Response("OK", { status: 200, headers: corsHeaders });
+    return errorResponse(
+      err instanceof Error ? err.message : "Erro interno",
+      500
+    );
   }
 });
-
-

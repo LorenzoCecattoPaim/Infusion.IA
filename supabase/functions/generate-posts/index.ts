@@ -6,16 +6,15 @@ import {
   validateWithAgent,
   safeParseJSON,
   renderBusinessPrompt,
-  corsHeaders,
-  errorResponse,
 } from "../_shared/agents.ts";
+import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 import { log, logError } from "../_shared/monitoring.ts";
 
 const CREDIT_COST = 2;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return optionsResponse();
   }
 
   const startTime = Date.now();
@@ -40,13 +39,18 @@ serve(async (req) => {
 
     userId = user.id;
 
-    const body = await req.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
     const brief = body.brief || "";
     const channels = body.channels || (body.canal ? [body.canal] : ["Instagram"]);
-    const objetivo = body.objetivo || "Não informado";
-    const tipoConteudo = body.tipo_conteudo || body.tipoConteudo || "Não informado";
+    const objetivo = body.objetivo || "NÃ£o informado";
+    const tipoConteudo = body.tipo_conteudo || body.tipoConteudo || "NÃ£o informado";
 
-    if (!channels?.length) return errorResponse("canal é obrigatório", 400);
+    if (!channels?.length) return errorResponse("canal Ã© obrigatÃ³rio", 400);
 
     // Check credits
     const { data: credits } = await supabase
@@ -74,7 +78,7 @@ serve(async (req) => {
     );
     if (!validation.ok) {
       return errorResponse(
-        `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
+        `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
         400
       );
     }
@@ -88,10 +92,10 @@ serve(async (req) => {
     const userPrompt = `
 Canal: ${channels.join(", ")}
 Objetivo: ${objetivo}
-Tipo de conteúdo: ${tipoConteudo}
-Brief: ${brief || "Não informado"}
+Tipo de conteÃºdo: ${tipoConteudo}
+Brief: ${brief || "NÃ£o informado"}
 
-Gere um post para cada canal solicitado. Responda apenas com JSON válido.`.trim();
+Gere um post para cada canal solicitado. Responda apenas com JSON vÃ¡lido.`.trim();
 
     const model = Deno.env.get("AI_MODEL_MARKETING") || "gpt-4o";
 
@@ -117,7 +121,7 @@ Gere um post para cada canal solicitado. Responda apenas com JSON válido.`.trim
     const resultValidation = await validateWithAgent(result);
     if (!resultValidation.ok) {
       return errorResponse(
-        `Conteúdo gerado não permitido: ${resultValidation.motivo_rejeicao}`,
+        `ConteÃºdo gerado nÃ£o permitido: ${resultValidation.motivo_rejeicao}`,
         400
       );
     }
@@ -156,9 +160,7 @@ Gere um post para cada canal solicitado. Responda apenas com JSON válido.`.trim
       duration_ms: Date.now() - startTime,
     });
 
-    return new Response(JSON.stringify(parsed), {
-      headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" },
-    });
+    return jsonResponse(parsed);
   } catch (err) {
     logError("generate-posts", userId, err);
     return errorResponse(
@@ -167,6 +169,3 @@ Gere um post para cada canal solicitado. Responda apenas com JSON válido.`.trim
     );
   }
 });
-
-
-

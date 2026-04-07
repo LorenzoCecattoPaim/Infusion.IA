@@ -6,9 +6,8 @@ import {
   validateWithAgent,
   safeParseJSON,
   renderBusinessPrompt,
-  corsHeaders,
-  errorResponse,
 } from "../_shared/agents.ts";
+import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 import { log, logError } from "../_shared/monitoring.ts";
 
 const CREDIT_COST = 1;
@@ -21,7 +20,7 @@ const LIMITES: Record<string, number> = {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return optionsResponse();
   }
 
   const startTime = Date.now();
@@ -45,6 +44,12 @@ serve(async (req) => {
 
     userId = user.id;
 
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
     const {
       tipo_conteudo,
       descricao,
@@ -53,10 +58,18 @@ serve(async (req) => {
       variation,
       refine_notes,
       previous_text,
-    } = await req.json();
+    } = body as {
+      tipo_conteudo?: string;
+      descricao?: string;
+      publico_alvo?: string;
+      tom_voz?: string;
+      variation?: boolean;
+      refine_notes?: string;
+      previous_text?: string;
+    };
 
     if (!tipo_conteudo || !descricao?.trim()) {
-      return errorResponse("tipo_conteudo e descricao são obrigatórios", 400);
+      return errorResponse("tipo_conteudo e descricao sÃ£o obrigatÃ³rios", 400);
     }
 
     const { data: credits } = await supabase
@@ -82,7 +95,7 @@ serve(async (req) => {
     );
     if (!validation.ok) {
       return errorResponse(
-        `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
+        `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
         400
       );
     }
@@ -96,16 +109,16 @@ serve(async (req) => {
     const limite = LIMITES[tipo_conteudo as string] || 0;
 
     const userPrompt = `
-Tipo de conteúdo: ${tipo_conteudo}
-Limite de caracteres (quando aplicável): ${limite || "N/A"}
-Descrição: ${descricao}
-Público-alvo: ${publico_alvo || "Não informado"}
-Tom de voz: ${tom_voz || "Não informado"}
-Variação solicitada: ${variation ? "Sim" : "Não"}
+Tipo de conteÃºdo: ${tipo_conteudo}
+Limite de caracteres (quando aplicÃ¡vel): ${limite || "N/A"}
+DescriÃ§Ã£o: ${descricao}
+PÃºblico-alvo: ${publico_alvo || "NÃ£o informado"}
+Tom de voz: ${tom_voz || "NÃ£o informado"}
+VariaÃ§Ã£o solicitada: ${variation ? "Sim" : "NÃ£o"}
 Refinamento solicitado: ${refine_notes || "Nenhum"}
 Texto anterior (se houver): ${previous_text || "N/A"}
 
-Gere o conteúdo solicitado respeitando o limite quando aplicável. Responda apenas com JSON válido.`.trim();
+Gere o conteÃºdo solicitado respeitando o limite quando aplicÃ¡vel. Responda apenas com JSON vÃ¡lido.`.trim();
 
     const model = Deno.env.get("AI_MODEL_MARKETING") || "gpt-4o";
 
@@ -135,7 +148,7 @@ Gere o conteúdo solicitado respeitando o limite quando aplicável. Responda ape
     const resultValidation = await validateWithAgent(result);
     if (!resultValidation.ok) {
       return errorResponse(
-        `Conteúdo gerado não permitido: ${resultValidation.motivo_rejeicao}`,
+        `ConteÃºdo gerado nÃ£o permitido: ${resultValidation.motivo_rejeicao}`,
         400
       );
     }
@@ -157,9 +170,7 @@ Gere o conteúdo solicitado respeitando o limite quando aplicável. Responda ape
       duration_ms: Date.now() - startTime,
     });
 
-    return new Response(JSON.stringify(parsed), {
-      headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" },
-    });
+    return jsonResponse(parsed);
   } catch (err) {
     logError("generate-text", userId, err);
     return errorResponse(

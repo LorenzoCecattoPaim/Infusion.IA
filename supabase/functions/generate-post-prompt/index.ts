@@ -6,14 +6,13 @@ import {
   validateWithAgent,
   safeParseJSON,
   renderBusinessPrompt,
-  corsHeaders,
-  errorResponse,
 } from "../_shared/agents.ts";
+import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 import { log, logError } from "../_shared/monitoring.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return optionsResponse();
   }
 
   const startTime = Date.now();
@@ -37,6 +36,12 @@ serve(async (req) => {
 
     userId = user.id;
 
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
     const {
       tipo_post,
       descricao,
@@ -44,10 +49,17 @@ serve(async (req) => {
       estilo,
       incluir_espaco_logo,
       logo_presente,
-    } = await req.json();
+    } = body as {
+      tipo_post?: string;
+      descricao?: string;
+      formato?: string;
+      estilo?: string;
+      incluir_espaco_logo?: boolean;
+      logo_presente?: boolean;
+    };
 
     if (!tipo_post || !descricao?.trim() || !formato || !estilo) {
-      return errorResponse("Campos obrigatórios não preenchidos", 400);
+      return errorResponse("Campos obrigatÃ³rios nÃ£o preenchidos", 400);
     }
 
     const validation = await validateWithAgent(
@@ -55,7 +67,7 @@ serve(async (req) => {
     );
     if (!validation.ok) {
       return errorResponse(
-        `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
+        `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
         400
       );
     }
@@ -76,15 +88,15 @@ serve(async (req) => {
 
     const userPrompt = `
 Tipo de post: ${tipo_post}
-Descrição: ${descricao}
+DescriÃ§Ã£o: ${descricao}
 Formato da imagem: ${formato}
 Estilo visual: ${estilo}
-Logo fornecida: ${logo_presente ? "Sim" : "Não"}
-Incluir espaço para logotipo no canto inferior direito: ${
-      incluir_espaco_logo ? "Sim" : "Não"
+Logo fornecida: ${logo_presente ? "Sim" : "NÃ£o"}
+Incluir espaÃ§o para logotipo no canto inferior direito: ${
+      incluir_espaco_logo ? "Sim" : "NÃ£o"
     }
 
-Crie um prompt objetivo e pronto para geração de imagem. Se precisar de detalhes adicionais, faça até 3 perguntas diretas. Responda apenas com JSON válido.`.trim();
+Crie um prompt objetivo e pronto para geraÃ§Ã£o de imagem. Se precisar de detalhes adicionais, faÃ§a atÃ© 3 perguntas diretas. Responda apenas com JSON vÃ¡lido.`.trim();
 
     const model = Deno.env.get("AI_MODEL_MARKETING") || "gpt-4o";
 
@@ -115,9 +127,7 @@ Crie um prompt objetivo e pronto para geração de imagem. Se precisar de detalh
       duration_ms: Date.now() - startTime,
     });
 
-    return new Response(JSON.stringify(parsed), {
-      headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" },
-    });
+    return jsonResponse(parsed);
   } catch (err) {
     logError("generate-post-prompt", userId, err);
     return errorResponse(

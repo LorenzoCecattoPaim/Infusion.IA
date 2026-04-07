@@ -7,9 +7,8 @@ import {
   validateWithAgent,
   safeParseJSON,
   renderBusinessPrompt,
-  corsHeaders,
-  errorResponse,
 } from "../_shared/agents.ts";
+import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 import { log, logError } from "../_shared/monitoring.ts";
 
 const CREDIT_COST_PER_MESSAGE = 2;
@@ -17,7 +16,7 @@ const CREDIT_COST_PER_IMAGE = 5;
 
 async function generateLogoWithLeonardo(prompt: string): Promise<string> {
   const apiKey = Deno.env.get("LEONARDO_API_KEY") || "";
-  if (!apiKey) throw new Error("LEONARDO_API_KEY não configurado.");
+  if (!apiKey) throw new Error("LEONARDO_API_KEY nÃ£o configurado.");
 
   const logoPrompt = `${prompt}, professional logo design, vector art style, clean lines, scalable, minimal background, high quality, crisp edges`;
   const negativePrompt =
@@ -51,7 +50,7 @@ async function generateLogoWithLeonardo(prompt: string): Promise<string> {
 
   const initData = await initRes.json();
   const generationId = initData.sdGenerationJob?.generationId;
-  if (!generationId) throw new Error("Leonardo: falha ao iniciar geração de logo");
+  if (!generationId) throw new Error("Leonardo: falha ao iniciar geraÃ§Ã£o de logo");
 
   for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 2000));
@@ -71,10 +70,10 @@ async function generateLogoWithLeonardo(prompt: string): Promise<string> {
       if (url) return url;
       throw new Error("Leonardo: logo gerado sem URL.");
     }
-    if (gen?.status === "FAILED") throw new Error("Leonardo: geração de logo falhou");
+    if (gen?.status === "FAILED") throw new Error("Leonardo: geraÃ§Ã£o de logo falhou");
   }
 
-  throw new Error("Leonardo: timeout na geração de logo");
+  throw new Error("Leonardo: timeout na geraÃ§Ã£o de logo");
 }
 
 async function buildLogoPrompts(conversation: string): Promise<{ prompts: string[]; descriptions: string[] }> {
@@ -92,7 +91,7 @@ async function buildLogoPrompts(conversation: string): Promise<{ prompts: string
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return optionsResponse();
   }
 
   const startTime = Date.now();
@@ -117,9 +116,19 @@ serve(async (req) => {
 
     userId = user.id;
 
-    const { messages, action, selectedPrompt } = await req.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
+    const { messages, action, selectedPrompt } = body as {
+      messages?: Array<{ role: string; content: string }>;
+      action?: string;
+      selectedPrompt?: string;
+    };
     if (!Array.isArray(messages) || messages.length === 0) {
-      return errorResponse("messages é obrigatório", 400);
+      return errorResponse("messages Ã© obrigatÃ³rio", 400);
     }
 
     // Check credits
@@ -157,7 +166,7 @@ serve(async (req) => {
       const descriptions = promptSet.descriptions?.length ? promptSet.descriptions.slice(0, 3) : [];
 
       if (prompts.length < 3) {
-        return errorResponse("Não foi possível gerar os prompts do logo.", 500);
+        return errorResponse("NÃ£o foi possÃ­vel gerar os prompts do logo.", 500);
       }
 
       const logoUrls = await Promise.all(prompts.map((p) => generateLogoWithLeonardo(p)));
@@ -194,15 +203,15 @@ serve(async (req) => {
         duration_ms: Date.now() - startTime,
       });
 
-      return new Response(
-        JSON.stringify({ message: "Aqui estão suas três sugestões de logo! Qual delas você mais gostou?", logos }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
-      );
+      return jsonResponse({
+        message: "Aqui estÃ£o suas trÃªs sugestÃµes de logo! Qual delas vocÃª mais gostou?",
+        logos,
+      });
     }
 
     if (action === "generate_variations") {
       if (!selectedPrompt) {
-        return errorResponse("selectedPrompt é obrigatório", 400);
+        return errorResponse("selectedPrompt Ã© obrigatÃ³rio", 400);
       }
 
       const variations = [
@@ -254,10 +263,7 @@ serve(async (req) => {
         duration_ms: Date.now() - startTime,
       });
 
-      return new Response(
-        JSON.stringify({ message: "Aqui estão as variações do seu logo!", logos }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
-      );
+      return jsonResponse({ message: "Aqui estÃ£o as variaÃ§Ãµes do seu logo!", logos });
     }
 
     // Validate last user message
@@ -269,7 +275,7 @@ serve(async (req) => {
       const validation = await validateWithAgent(lastMsg.content);
       if (!validation.ok) {
         return errorResponse(
-          `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
+          `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
           400
         );
       }
@@ -310,10 +316,7 @@ serve(async (req) => {
       duration_ms: Date.now() - startTime,
     });
 
-    return new Response(
-      JSON.stringify({ message: agentText, logos: [] }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
-    );
+    return jsonResponse({ message: agentText, logos: [] });
   } catch (err) {
     logError("logo-generator", userId, err);
     return errorResponse(
@@ -322,6 +325,3 @@ serve(async (req) => {
     );
   }
 });
-
-
-

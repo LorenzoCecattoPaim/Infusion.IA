@@ -1,16 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, errorResponse } from "../_shared/agents.ts";
+import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 
 const PLANS: Record<string, { credits: number; amount_cents: number; label: string }> = {
-  starter: { credits: 100, amount_cents: 1990, label: "Starter — 100 créditos" },
-  pro: { credits: 300, amount_cents: 4990, label: "Pro — 300 créditos" },
-  business: { credits: 1000, amount_cents: 12990, label: "Business — 1.000 créditos" },
+  starter: { credits: 100, amount_cents: 1990, label: "Starter â€” 100 crÃ©ditos" },
+  pro: { credits: 300, amount_cents: 4990, label: "Pro â€” 300 crÃ©ditos" },
+  business: { credits: 1000, amount_cents: 12990, label: "Business â€” 1.000 crÃ©ditos" },
 };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return optionsResponse();
   }
 
   try {
@@ -30,9 +30,15 @@ serve(async (req) => {
     } = await supabase.auth.getUser(token);
     if (authError || !user) return errorResponse("Unauthorized", 401);
 
-    const { plan } = await req.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
+    const { plan } = body as { plan?: string };
     const planConfig = PLANS[plan];
-    if (!planConfig) return errorResponse("Plano inválido", 400);
+    if (!planConfig) return errorResponse("Plano invÃ¡lido", 400);
 
     const pagarmeKey = Deno.env.get("PAGARME_API_KEY") || "";
 
@@ -52,15 +58,12 @@ serve(async (req) => {
     if (!order) return errorResponse("Erro ao criar pedido", 500);
 
     if (!pagarmeKey) {
-      // Dev mode — simulate payment URL
-      return new Response(
-        JSON.stringify({
-          payment_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/recharge-credits?order_id=${order.id}&credits=${planConfig.credits}&user_id=${user.id}`,
-          order_id: order.id,
-          dev_mode: true,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
-      );
+      // Dev mode â€” simulate payment URL
+      return jsonResponse({
+        payment_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/recharge-credits?order_id=${order.id}&credits=${planConfig.credits}&user_id=${user.id}`,
+        order_id: order.id,
+        dev_mode: true,
+      });
     }
 
     // Pagar.me API call
@@ -123,10 +126,7 @@ serve(async (req) => {
       })
       .eq("id", order.id);
 
-    return new Response(
-      JSON.stringify({ payment_url: paymentUrl, order_id: order.id }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
-    );
+    return jsonResponse({ payment_url: paymentUrl, order_id: order.id });
   } catch (err) {
     console.error("buy-credits error:", err);
     return errorResponse(
@@ -135,6 +135,3 @@ serve(async (req) => {
     );
   }
 });
-
-
-

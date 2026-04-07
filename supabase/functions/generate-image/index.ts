@@ -5,9 +5,8 @@ import {
   callAgent,
   validateWithAgent,
   safeParseJSON,
-  corsHeaders,
-  errorResponse,
 } from "../_shared/agents.ts";
+import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 import { log, logError } from "../_shared/monitoring.ts";
 
 const LEONARDO_API_KEY = () => Deno.env.get("LEONARDO_API_KEY") || "";
@@ -26,7 +25,7 @@ async function generateWithLeonardo(
   height: number
 ): Promise<string> {
   const apiKey = LEONARDO_API_KEY();
-  if (!apiKey) throw new Error("LEONARDO_API_KEY não configurado.");
+  if (!apiKey) throw new Error("LEONARDO_API_KEY nÃ£o configurado.");
 
   const body = {
     prompt,
@@ -59,7 +58,7 @@ async function generateWithLeonardo(
 
   const initData = await initRes.json();
   const generationId = initData.sdGenerationJob?.generationId;
-  if (!generationId) throw new Error("Leonardo: falha ao iniciar geração");
+  if (!generationId) throw new Error("Leonardo: falha ao iniciar geraÃ§Ã£o");
 
   // Poll for completion
   for (let i = 0; i < 30; i++) {
@@ -79,21 +78,21 @@ async function generateWithLeonardo(
 
     if (gen?.status === "COMPLETE") {
       const url = gen.generated_images?.[0]?.url;
-      if (!url) throw new Error("Leonardo: URL da imagem não encontrada");
+      if (!url) throw new Error("Leonardo: URL da imagem nÃ£o encontrada");
       return url;
     }
 
     if (gen?.status === "FAILED") {
-      throw new Error("Leonardo: geração falhou");
+      throw new Error("Leonardo: geraÃ§Ã£o falhou");
     }
   }
 
-  throw new Error("Leonardo: timeout na geração (60s)");
+  throw new Error("Leonardo: timeout na geraÃ§Ã£o (60s)");
 }
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return optionsResponse();
   }
 
   const startTime = Date.now();
@@ -118,9 +117,20 @@ serve(async (req) => {
 
     userId = user.id;
 
-    const { prompt, quality = "standard", template, format } = await req.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
+    const { prompt, quality = "standard", template, format } = body as {
+      prompt?: string;
+      quality?: "standard" | "premium";
+      template?: string;
+      format?: string;
+    };
 
-    if (!prompt?.trim()) return errorResponse("prompt é obrigatório", 400);
+    if (!prompt?.trim()) return errorResponse("prompt Ã© obrigatÃ³rio", 400);
 
     const creditCost = quality === "premium" ? 10 : 5;
 
@@ -148,15 +158,15 @@ serve(async (req) => {
     const validation = await validateWithAgent(prompt);
     if (!validation.ok) {
       return errorResponse(
-        `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
+        `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
         400
       );
     }
 
     // Optimize prompt with Agent 4
     const userContent = template
-      ? `Otimize este prompt para geração de imagem. Template: ${template}. Descrição: ${prompt}`
-      : `Otimize este prompt para geração de imagem: ${prompt}`;
+      ? `Otimize este prompt para geraÃ§Ã£o de imagem. Template: ${template}. DescriÃ§Ã£o: ${prompt}`
+      : `Otimize este prompt para geraÃ§Ã£o de imagem: ${prompt}`;
 
     let optimized: {
       prompt_1: string;
@@ -250,10 +260,7 @@ serve(async (req) => {
       duration_ms: Date.now() - startTime,
     });
 
-    return new Response(
-      JSON.stringify({ images: savedImages, style_notes: optimized.style_notes }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json; charset=UTF-8" } }
-    );
+    return jsonResponse({ images: savedImages, style_notes: optimized.style_notes });
   } catch (err) {
     logError("generate-image", userId, err);
     return errorResponse(
@@ -262,8 +269,3 @@ serve(async (req) => {
     );
   }
 });
-
-
-
-
-
