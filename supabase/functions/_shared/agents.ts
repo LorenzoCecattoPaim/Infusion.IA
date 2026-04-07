@@ -2,9 +2,59 @@
 // Utilitário central de agentes de IA ? zero dependência de serviços externos não configurados
 
 const AI_API_BASE = "https://api.openai.com/v1";
+const DEFAULT_SYSTEM_PROMPT =
+  "Você é um assistente útil, direto e confiável. Responda com clareza e objetividade.";
+const DEFAULT_FAILSAFE_MESSAGE =
+  "Desculpe, não consegui responder agora. Tente novamente em instantes.";
+const MAX_DEBUG_CHARS = 2000;
 
 function getApiKey(): string {
   return Deno.env.get("AI_API_KEY") || Deno.env.get("OPENAI_API_KEY") || "";
+}
+
+function normalizeSystemPrompt(prompt: string | null | undefined): string {
+  const cleaned = (prompt ?? "").trim();
+  if (!cleaned) {
+    console.warn("[AI] system prompt vazio. Usando fallback.");
+    return DEFAULT_SYSTEM_PROMPT;
+  }
+  return cleaned;
+}
+
+function interpolatePrompt(
+  prompt: string,
+  vars?: Record<string, string>
+): string {
+  if (!vars) return prompt;
+  let result = prompt;
+  for (const [key, value] of Object.entries(vars)) {
+    const safeValue = value ?? "";
+    result = result
+      .replaceAll(`\${${key}}`, safeValue)
+      .replaceAll(`{${key}}`, safeValue);
+  }
+  return result;
+}
+
+function normalizeMessages(messages: AgentMessage[]): AgentMessage[] {
+  const filtered = (messages || []).filter(
+    (m) => m && (m.role === "user" || m.role === "assistant") && m.content
+  );
+  if (!filtered.some((m) => m.role === "user")) {
+    console.warn("[AI] Nenhuma mensagem de usuário encontrada. Inserindo fallback.");
+    filtered.unshift({
+      role: "user",
+      content: "Por favor, continue com base no contexto fornecido.",
+    });
+  }
+  return filtered;
+}
+
+function toDebugText(value: unknown, maxChars = MAX_DEBUG_CHARS): string {
+  const raw =
+    typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  if (raw.length <= maxChars) return raw;
+  return `${raw.substring(0, maxChars)}...`;
 }
 
 // --- SYSTEM PROMPTS ------------------------------------------------------------
@@ -176,6 +226,9 @@ export interface CallAgentOptions {
   responseFormat?: "json_object" | "text";
   maxTokens?: number;
   temperature?: number;
+  promptVars?: Record<string, string>;
+  debugTag?: string;
+  failSafeMessage?: string;
 }
 
 export interface ValidationResult {
@@ -203,6 +256,9 @@ export async function callAgent(
     responseFormat,
     maxTokens = 4096,
     temperature = 0.7,
+    promptVars,
+    debugTag = "callAgent",
+    failSafeMessage = DEFAULT_FAILSAFE_MESSAGE,
   } = options;
 
   const apiKey = getApiKey();
@@ -210,11 +266,15 @@ export async function callAgent(
     throw new Error("AI_API_KEY não configurado nos secrets do Supabase.");
   }
 
+  const interpolatedPrompt = interpolatePrompt(systemPrompt, promptVars);
+  const finalPrompt = normalizeSystemPrompt(interpolatedPrompt);
+  const normalizedMessages = normalizeMessages(messages);
+
   const body: Record<string, unknown> = {
     model,
     messages: [
-      { role: "system", content: systemPrompt },
-      ...messages.filter((m) => m.role !== "system"),
+      { role: "system", content: finalPrompt },
+      ...normalizedMessages,
     ],
     max_tokens: maxTokens,
     temperature,
@@ -225,26 +285,50 @@ export async function callAgent(
     body.response_format = { type: "json_object" };
   }
 
-  const response = await fetch(`${AI_API_BASE}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json; charset=UTF-8",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  });
+  console.log(`[AI] ${debugTag} prompt`, toDebugText(finalPrompt));
+  console.log(`[AI] ${debugTag} messages`, toDebugText(body.messages));
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`AI API error ${response.status}: ${errorText}`);
+  try {
+    const response = await fetch(`${AI_API_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=UTF-8",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(
+        `[AI] ${debugTag} error`,
+        `AI API error ${response.status}: ${errorText}`
+      );
+      if (stream) {
+        throw new Error(`AI API error ${response.status}: ${errorText}`);
+      }
+      return failSafeMessage;
+    }
+
+    if (stream) {
+      return response;
+    }
+
+    const data = await response.json().catch(() => null);
+    console.log(`[AI] ${debugTag} response`, toDebugText(data));
+    const content = data?.choices?.[0]?.message?.content;
+    if (typeof content !== "string" || !content.trim()) {
+      console.warn(`[AI] ${debugTag} resposta vazia. Usando fallback.`);
+      return failSafeMessage;
+    }
+    return content;
+  } catch (error) {
+    console.error(`[AI] ${debugTag} exception`, error);
+    if (stream) {
+      throw error;
+    }
+    return failSafeMessage;
   }
-
-  if (stream) {
-    return response;
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || "";
 }
 
 /**
@@ -276,15 +360,29 @@ export async function validateWithAgent(
       responseFormat: "json_object",
       maxTokens: 512,
       temperature: 0.1,
+      debugTag: "validator",
+      failSafeMessage: "{}",
     })) as string;
 
-    const parsed = JSON.parse(result);
+    const parsed = safeParseJSON<Record<string, unknown>>(result, {});
+    const aprovado = parsed.aprovado === true;
+    const score =
+      typeof parsed.score === "number" ? parsed.score : aprovado ? 90 : 60;
+    const problemas = Array.isArray(parsed.problemas)
+      ? (parsed.problemas as string[])
+      : [];
+    const sugestoes =
+      typeof parsed.sugestoes === "string" ? parsed.sugestoes : null;
+    const motivo_rejeicao =
+      typeof parsed.motivo_rejeicao === "string"
+        ? parsed.motivo_rejeicao
+        : null;
     return {
-      ok: parsed.aprovado === true,
-      score: parsed.score ? 0,
-      problemas: parsed.problemas ? [],
-      sugestoes: parsed.sugestoes ? null,
-      motivo_rejeicao: parsed.motivo_rejeicao ? null,
+      ok: aprovado,
+      score,
+      problemas,
+      sugestoes,
+      motivo_rejeicao,
     };
   } catch {
     // Falha silenciosa ? aprovado por padrão
@@ -305,7 +403,7 @@ export function renderBusinessPrompt(
   profile: Record<string, unknown> | null,
   materialsContext: string
 ): string {
-  if (!profile) return basePrompt;
+  if (!profile) return normalizeSystemPrompt(basePrompt);
 
   const segmento =
     (profile.segmento_atuacao as string) ||
@@ -351,7 +449,7 @@ export function renderBusinessPrompt(
     ? `\n\nMATERIAIS FORNECIDOS PELO CLIENTE:\n${materialsContext}`
     : "";
 
-  return `${basePrompt}${profileContext}${materialsSection}`;
+  return `${normalizeSystemPrompt(basePrompt)}${profileContext}${materialsSection}`;
 }
 
 /**
