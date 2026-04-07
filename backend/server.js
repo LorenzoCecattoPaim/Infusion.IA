@@ -32,13 +32,38 @@ function getSupabase() {
   });
 }
 
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
-  : ["https://infusion-ia.vercel.app"];
+const defaultAllowedOrigins = [
+  "https://infusion-ia.vercel.app",
+  "https://*.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:4173",
+];
+
+const rawAllowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim()).filter(Boolean)
+  : defaultAllowedOrigins;
+
+function originToRegex(origin) {
+  const escaped = origin
+    .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*");
+  return new RegExp(`^${escaped}$`);
+}
+
+const allowedOriginRegexes = rawAllowedOrigins.map(originToRegex);
 
 const corsConfig = cors({
-  origin: allowedOrigins,
-  methods: ["GET", "POST", "OPTIONS"],
+  origin: (origin, callback) => {
+    if (!origin) {
+      return callback(null, true);
+    }
+    if (rawAllowedOrigins.includes("*")) {
+      return callback(null, true);
+    }
+    const isAllowed = allowedOriginRegexes.some((re) => re.test(origin));
+    return callback(isAllowed ? null : new Error("Not allowed by CORS"), isAllowed);
+  },
+  methods: ["GET", "POST", "PUT", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 });
 
@@ -87,9 +112,18 @@ app.get("/credits", requireAuth, async (req, res) => {
       .from("user_credits")
       .select("credits, plan")
       .eq("user_id", req.user.id)
-      .single();
+      .maybeSingle();
     if (error) throw error;
-    return sendSuccess(res, data || { credits: 0, plan: "free" });
+    if (!data) {
+      const { data: created, error: insertError } = await supabase
+        .from("user_credits")
+        .insert({ user_id: req.user.id, credits: 100, plan: "free" })
+        .select("credits, plan")
+        .single();
+      if (insertError) throw insertError;
+      return sendSuccess(res, created);
+    }
+    return sendSuccess(res, data);
   } catch (error) {
     console.error("[CREDITS] error", error);
     return sendError(res, 500, "Erro ao carregar créditos.");

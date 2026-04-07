@@ -3,7 +3,7 @@
 
 create table if not exists public.user_credits (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  credits integer not null default 0,
+  credits integer not null default 100,
   plan text default 'free',
   updated_at timestamptz default now()
 );
@@ -91,7 +91,7 @@ create or replace function public.handle_new_user_credits()
 returns trigger as $$
 begin
   insert into public.user_credits (user_id, credits, plan)
-  values (new.id, 10, 'free')
+  values (new.id, 100, 'free')
   on conflict (user_id) do nothing;
   return new;
 end;
