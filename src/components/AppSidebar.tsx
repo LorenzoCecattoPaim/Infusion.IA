@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import NavLink from "./NavLink";
 import { useState } from "react";
 import BuyCreditsDialog from "./BuyCreditsDialog";
-
+import favicon from "../../favicon.png";
 const NAV_ITEMS = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/chat", icon: MessageSquare, label: "Consultor de Marketing IA" },
@@ -51,7 +51,7 @@ export default function AppSidebar() {
         <SidebarHeader className="p-4 border-b border-sidebar-border">
           <div className="flex items-center gap-3">
             <img
-              src="../favicon.png"
+              src={favicon}
               alt="Infusion.IA"
               className="h-7 w-7 rounded-lg object-contain"
             />
