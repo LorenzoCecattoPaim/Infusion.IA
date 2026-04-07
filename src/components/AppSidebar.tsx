@@ -51,7 +51,7 @@ export default function AppSidebar() {
         <SidebarHeader className="p-4 border-b border-sidebar-border">
           <div className="flex items-center gap-3">
             <img
-              src="../favicon"
+              src="../favicon.png"
               alt="Infusion.IA"
               className="h-7 w-7 rounded-lg object-contain"
             />
