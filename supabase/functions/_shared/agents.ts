@@ -39,7 +39,7 @@ REGRAS IMPORTANTES:
 - Usar APENAS o nome fornecido pelo usuário
 - SEM textos extras nos logos
 
-INTERA??O:
+INTERAÇÃO:
 
 - Perguntar de qual opção o usuário gostou
 - Se não gostar ? gerar novas opções
@@ -150,7 +150,7 @@ CRIT?RIOS DE VALIDA??O:
 4. QUALIDADE: Deve ser coerente e útil.
 5. PRIVACIDADE: Nenhuma solicitação de dados pessoais sensíveis.
 
-RESPONDA APENAS EM JSON V?LIDO:
+RESPONDA APENAS EM JSON VÁLIDO:
 {
   "aprovado": true,
   "score": 95,
