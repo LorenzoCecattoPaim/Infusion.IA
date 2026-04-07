@@ -103,6 +103,10 @@ Crie um prompt objetivo e pronto para geração de imagem. Se precisar de detalh
       observacoes?: string;
     }>(result, { prompt: "", perguntas: [] });
 
+    if (!parsed.prompt?.trim() && (!parsed.perguntas || parsed.perguntas.length === 0)) {
+      throw new Error("IA retornou resposta vazia.");
+    }
+
     log({
       function: "generate-post-prompt",
       user_id: userId,

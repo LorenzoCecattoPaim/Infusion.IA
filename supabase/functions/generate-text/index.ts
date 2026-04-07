@@ -124,6 +124,14 @@ Gere o conteúdo solicitado respeitando o limite quando aplicável. Responda ape
       prompt: string | null;
     }>(result, { texto: "", sugestoes: [], prompt: null });
 
+    if (
+      !parsed.texto?.trim() &&
+      !parsed.prompt &&
+      (!parsed.sugestoes || parsed.sugestoes.length === 0)
+    ) {
+      throw new Error("IA retornou resposta vazia.");
+    }
+
     const resultValidation = await validateWithAgent(result);
     if (!resultValidation.ok) {
       return errorResponse(

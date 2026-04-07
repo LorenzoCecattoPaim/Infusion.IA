@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import DashboardLayout from "@/components/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
-import { getFunctionsBaseUrl } from "@/lib/apiBase";
+import { fetchFunctions } from "@/lib/apiBase";
 import { useCredits } from "@/hooks/useCredits";
 import { useGeneratedImages, type GeneratedImage } from "@/hooks/useGeneratedImages";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
@@ -67,17 +67,14 @@ export default function ImageGeneratorPage() {
       } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      const res = await fetch(
-        `${getFunctionsBaseUrl()}/functions/v1/generate-image`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json; charset=UTF-8",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ prompt, quality, template: selectedTemplate }),
-        }
-      );
+      const res = await fetchFunctions("/functions/v1/generate-image", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json; charset=UTF-8",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ prompt, quality, template: selectedTemplate }),
+      });
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -98,6 +95,7 @@ export default function ImageGeneratorPage() {
       toast.success("Imagens geradas! Escolha sua favorita.");
     },
     onError: (err: Error) => {
+      console.error("[AI] generate-image error", err);
       toast.error(err.message);
     },
   });
@@ -131,7 +129,8 @@ export default function ImageGeneratorPage() {
       a.download = `infusion-ia-${img.id}.png`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
+    } catch (err) {
+      console.error("[AI] Download error", err);
       toast.error("Erro ao baixar imagem.");
     }
   };

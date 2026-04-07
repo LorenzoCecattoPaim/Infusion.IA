@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useBusinessProfile } from "@/hooks/useBusinessProfile";
 import { useAuth } from "@/hooks/useAuth";
 import { buildRagContext } from "@/lib/rag";
-import { getFunctionsBaseUrl } from "@/lib/apiBase";
+import { fetchFunctions } from "@/lib/apiBase";
 import { toast } from "sonner";
 
 interface Message {
@@ -188,24 +188,22 @@ export default function ChatPage() {
         content: m.content,
       }));
 
-      const response = await fetch(
-        `${getFunctionsBaseUrl()}/functions/v1/ai-chat`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json; charset=UTF-8",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            messages: allMessages,
-            stream: true,
-            lastMessageOverride: enrichedMessage,
-          }),
-        }
-      );
+      const response = await fetchFunctions("/functions/v1/ai-chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json; charset=UTF-8",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          messages: allMessages,
+          stream: true,
+          lastMessageOverride: enrichedMessage,
+        }),
+      });
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
+        console.error("[AI] Chat response error", { status: response.status, err });
         if (response.status === 402) {
           toast.error("Créditos insuficientes. Compre mais créditos para continuar.");
         } else {
@@ -262,7 +260,12 @@ export default function ChatPage() {
         await fetchHistory();
       }
     } catch (err) {
-      toast.error("Erro de conexão. Verifique sua internet e tente novamente.");
+      console.error("[AI] Chat error", err);
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Erro de conexão. Verifique sua internet e tente novamente."
+      );
     } finally {
       setIsLoading(false);
       queryClient.invalidateQueries({ queryKey: ["credits"] });

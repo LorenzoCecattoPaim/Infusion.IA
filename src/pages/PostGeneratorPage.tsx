@@ -144,6 +144,7 @@ export default function PostGeneratorPage() {
       queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
       toast.success("Post gerado com sucesso.");
     } catch (err) {
+      console.error("[AI] Post generator error", err);
       toast.error(err instanceof Error ? err.message : "Erro ao gerar post.");
     } finally {
       setLoading(false);
@@ -159,7 +160,8 @@ export default function PostGeneratorPage() {
       link.download = `post-${id || Date.now()}.png`;
       link.click();
       URL.revokeObjectURL(link.href);
-    } catch {
+    } catch (err) {
+      console.error("[AI] Download error", err);
       toast.error("Erro ao baixar imagem.");
     }
   };

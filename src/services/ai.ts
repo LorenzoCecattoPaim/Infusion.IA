@@ -1,13 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
-import { getFunctionsBaseUrl } from "@/lib/apiBase";
+import { fetchFunctions } from "@/lib/apiBase";
 
 async function getAuthToken(): Promise<string | null> {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.access_token ?? null;
-}
-
-function getBaseUrl(): string {
-  return getFunctionsBaseUrl();
 }
 
 export interface GeneratePostsPayload {
@@ -53,7 +49,7 @@ export async function generatePosts(
   const token = await getAuthToken();
   if (!token) throw new Error("Usuário não autenticado");
 
-  const res = await fetch(`${getBaseUrl()}/functions/v1/generate-posts`, {
+  const res = await fetchFunctions("/functions/v1/generate-posts", {
     method: "POST",
     headers: {
       "Content-Type": "application/json; charset=UTF-8",
@@ -64,6 +60,7 @@ export async function generatePosts(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    console.error("[AI] generatePosts error", { status: res.status, err });
     if (res.status === 402) throw new Error("Créditos insuficientes.");
     throw new Error(err.error || "Erro ao gerar posts.");
   }
@@ -77,7 +74,7 @@ export async function generateText(
   const token = await getAuthToken();
   if (!token) throw new Error("Usuário não autenticado");
 
-  const res = await fetch(`${getBaseUrl()}/functions/v1/generate-text`, {
+  const res = await fetchFunctions("/functions/v1/generate-text", {
     method: "POST",
     headers: {
       "Content-Type": "application/json; charset=UTF-8",
@@ -88,6 +85,7 @@ export async function generateText(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    console.error("[AI] generateText error", { status: res.status, err });
     if (res.status === 402) throw new Error("Créditos insuficientes.");
     throw new Error(err.error || "Erro ao gerar texto.");
   }
@@ -116,7 +114,7 @@ export async function generatePostPrompt(
   const token = await getAuthToken();
   if (!token) throw new Error("Usuário não autenticado");
 
-  const res = await fetch(`${getBaseUrl()}/functions/v1/generate-post-prompt`, {
+  const res = await fetchFunctions("/functions/v1/generate-post-prompt", {
     method: "POST",
     headers: {
       "Content-Type": "application/json; charset=UTF-8",
@@ -127,6 +125,7 @@ export async function generatePostPrompt(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    console.error("[AI] generatePostPrompt error", { status: res.status, err });
     throw new Error(err.error || "Erro ao gerar prompt do post.");
   }
 
@@ -142,7 +141,7 @@ export async function generateImage(payload: {
   const token = await getAuthToken();
   if (!token) throw new Error("Usuário não autenticado");
 
-  const res = await fetch(`${getBaseUrl()}/functions/v1/generate-image`, {
+  const res = await fetchFunctions("/functions/v1/generate-image", {
     method: "POST",
     headers: {
       "Content-Type": "application/json; charset=UTF-8",
@@ -153,11 +152,10 @@ export async function generateImage(payload: {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    console.error("[AI] generateImage error", { status: res.status, err });
     if (res.status === 402) throw new Error("Créditos insuficientes.");
     throw new Error(err.error || "Erro ao gerar imagem.");
   }
 
   return res.json();
 }
-
-

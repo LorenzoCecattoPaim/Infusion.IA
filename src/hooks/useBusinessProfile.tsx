@@ -11,25 +11,65 @@ type BusinessProfileUpdate =
   Database["public"]["Tables"]["business_profiles"]["Update"];
 export type BusinessProfile = Partial<BusinessProfileRow>;
 
+const LOCAL_PROFILE_KEY = "infusion_business_profile";
+
+function readLocalProfile(): BusinessProfile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(LOCAL_PROFILE_KEY);
+    return raw ? (JSON.parse(raw) as BusinessProfile) : null;
+  } catch (err) {
+    console.error("[BusinessProfile] Falha ao ler localStorage", err);
+    return null;
+  }
+}
+
+function writeLocalProfile(profile: BusinessProfile | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (!profile) {
+      window.localStorage.removeItem(LOCAL_PROFILE_KEY);
+      return;
+    }
+    window.localStorage.setItem(LOCAL_PROFILE_KEY, JSON.stringify(profile));
+  } catch (err) {
+    console.error("[BusinessProfile] Falha ao gravar localStorage", err);
+  }
+}
+
 export function useBusinessProfile() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const localFallback = readLocalProfile();
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["business_profile", user?.id],
     queryFn: async () => {
-      if (!user) return null;
-      const { data } = await supabase
-        .from("business_profiles")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle() as { data: { id: string } | null };
-      return data as BusinessProfile | null;
+      if (!user) return localFallback;
+      try {
+        const { data } = await supabase
+          .from("business_profiles")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle() as { data: { id: string } | null };
+        if (data) {
+          writeLocalProfile(data as BusinessProfile);
+        }
+        return (data as BusinessProfile | null) ?? localFallback;
+      } catch (err) {
+        console.error("[BusinessProfile] Erro ao carregar perfil", err);
+        return localFallback;
+      }
     },
     enabled: !!user,
+    initialData: localFallback ?? null,
   });
 
   const persistProfile = async (updates: BusinessProfileUpdate) => {
+    const currentLocal = readLocalProfile() || {};
+    const merged = { ...currentLocal, ...updates } as BusinessProfile;
+    writeLocalProfile(merged);
+
     if (!user) return;
     const { data: existing } = await supabase
       .from("business_profiles")

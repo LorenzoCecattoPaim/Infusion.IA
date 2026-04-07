@@ -12,7 +12,7 @@ import {
 import DashboardLayout from "@/components/DashboardLayout";
 import ChatMessage from "@/components/ChatMessage";
 import { supabase } from "@/integrations/supabase/client";
-import { getFunctionsBaseUrl } from "@/lib/apiBase";
+import { fetchFunctions } from "@/lib/apiBase";
 import { useCredits } from "@/hooks/useCredits";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -73,7 +73,7 @@ export default function LogoGeneratorPage() {
     } = await supabase.auth.getSession();
     const token = session?.access_token;
 
-    const res = await fetch(`${getFunctionsBaseUrl()}/functions/v1/logo-generator`, {
+    const res = await fetchFunctions("/functions/v1/logo-generator", {
       method: "POST",
       headers: {
         "Content-Type": "application/json; charset=UTF-8",
@@ -84,6 +84,7 @@ export default function LogoGeneratorPage() {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      console.error("[AI] Logo generator response error", { status: res.status, err });
       if (res.status === 402) {
         throw new Error("Créditos insuficientes.");
       }
@@ -133,6 +134,7 @@ export default function LogoGeneratorPage() {
       queryClient.invalidateQueries({ queryKey: ["credits"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
     } catch (err) {
+      console.error("[AI] Logo generator error", err);
       toast.error(err instanceof Error ? err.message : "Erro de conexão.");
     } finally {
       setLoading(false);
@@ -175,6 +177,7 @@ export default function LogoGeneratorPage() {
       queryClient.invalidateQueries({ queryKey: ["credits"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
     } catch (err) {
+      console.error("[AI] Logo generator error", err);
       toast.error(err instanceof Error ? err.message : "Erro ao gerar logos.");
     } finally {
       setLoading(false);
@@ -218,6 +221,7 @@ export default function LogoGeneratorPage() {
       queryClient.invalidateQueries({ queryKey: ["credits"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
     } catch (err) {
+      console.error("[AI] Logo generator error", err);
       toast.error(err instanceof Error ? err.message : "Erro ao gerar variações.");
     } finally {
       setLoading(false);
@@ -234,7 +238,8 @@ export default function LogoGeneratorPage() {
       a.download = `logo-infusion-ia.png`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
+    } catch (err) {
+      console.error("[AI] Download error", err);
       toast.error("Erro ao baixar logo.");
     }
   };
@@ -408,5 +413,10 @@ export default function LogoGeneratorPage() {
     </DashboardLayout>
   );
 }
+
+
+
+
+
 
 

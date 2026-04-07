@@ -109,6 +109,10 @@ Gere um post para cada canal solicitado. Responda apenas com JSON válido.`.trim
       { posts: [] }
     );
 
+    if (!parsed.posts || parsed.posts.length === 0) {
+      throw new Error("IA retornou resposta vazia.");
+    }
+
     // Validate generated content
     const resultValidation = await validateWithAgent(result);
     if (!resultValidation.ok) {
