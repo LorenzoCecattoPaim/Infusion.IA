@@ -471,10 +471,10 @@ export function safeParseJSON<T>(text: string, fallback: T): T {
  * Headers CORS padrão para todas as Edge Functions.
  */
 export const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "https://infusion-ia.vercel.app",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
 /**

@@ -29,7 +29,7 @@ serve(async (req) => {
 
       if (!order_id || !user_id || !credits) {
         console.error("Webhook: metadata incompleto", metadata);
-        return new Response("OK", { status: 200 });
+        return new Response("OK", { status: 200, headers: corsHeaders });
       }
 
       // Check if already processed
@@ -40,7 +40,7 @@ serve(async (req) => {
         .single();
 
       if (order?.status === "paid") {
-        return new Response("OK", { status: 200 });
+        return new Response("OK", { status: 200, headers: corsHeaders });
       }
 
       // Update order status
@@ -78,7 +78,7 @@ serve(async (req) => {
   } catch (err) {
     console.error("webhook-pagamento error:", err);
     // Always return 200 to prevent gateway retries on our bugs
-    return new Response("OK", { status: 200 });
+    return new Response("OK", { status: 200, headers: corsHeaders });
   }
 });
 
