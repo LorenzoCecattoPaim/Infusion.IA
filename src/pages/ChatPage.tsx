@@ -24,6 +24,13 @@ interface ConversationSummary {
   updated_at: string;
 }
 
+interface ApiMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+}
+
 const suggestions = [
   {
     text: "Crie um cronograma de postagens para 15 dias",
@@ -81,6 +88,10 @@ export default function ChatPage() {
   const queryClient = useQueryClient();
   const { profile: businessProfile } = useBusinessProfile();
   const { user } = useAuth();
+  const companyName =
+    typeof businessProfile?.nome_empresa === "string"
+      ? businessProfile.nome_empresa
+      : "";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -105,9 +116,9 @@ export default function ChatPage() {
 
     setActiveConversationId(id);
     setMessages(
-      (data.messages || []).map((m) => ({
+      ((data.messages as ApiMessage[] | undefined) || []).map((m: ApiMessage) => ({
         id: m.id,
-        role: m.role as "user" | "assistant",
+        role: m.role,
         content: m.content,
         timestamp: new Date(m.created_at),
       }))
@@ -327,9 +338,9 @@ export default function ChatPage() {
               <p className="text-muted-foreground mb-2 max-w-md">
                 Seu especialista em marketing para pequenas e médias empresas brasileiras.
               </p>
-              {businessProfile?.nome_empresa && (
+              {companyName && (
                 <p className="text-xs text-primary mb-8">
-                  Contexto ativo: {businessProfile.nome_empresa} ? perfil carregado
+                  Contexto ativo: {companyName} ? perfil carregado
                 </p>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">

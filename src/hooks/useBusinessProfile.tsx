@@ -2,7 +2,21 @@
 import { useAuth } from "./useAuth";
 import { fetchFunctions } from "@/lib/apiBase";
 
-export type BusinessProfile = Record<string, unknown>;
+export interface BusinessProfile {
+  nome_empresa?: string;
+  segmento_atuacao?: string;
+  objetivo_principal?: string;
+  publico_alvo?: string;
+  tom_comunicacao?: string;
+  marca_descricao?: string;
+  canais_atuacao?: string[];
+  tipo_conteudo?: string[];
+  nivel_experiencia?: string;
+  maior_desafio?: string;
+  uso_ia?: string;
+  contexto_json?: Record<string, unknown>;
+  [key: string]: unknown;
+}
 
 const LOCAL_PROFILE_KEY = "infusion_business_profile";
 
