@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   AGENTE_3_GERADOR_POSTS,
@@ -12,7 +11,8 @@ import { log, logError } from "../_shared/monitoring.ts";
 
 const CREDIT_COST = 2;
 
-serve(async (req) => {
+Deno.serve(async (req) => {
+  console.log("Request recebida:", req.method);
   if (req.method === "OPTIONS") {
     return optionsResponse();
   }
@@ -169,3 +169,6 @@ Gere um post para cada canal solicitado. Responda apenas com JSON vÃ¡lido.`.tr
     );
   }
 });
+
+
+

@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 
@@ -8,7 +7,8 @@ const PLANS: Record<string, { credits: number; amount_cents: number; label: stri
   business: { credits: 1000, amount_cents: 12990, label: "Business â€” 1.000 crÃ©ditos" },
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
+  console.log("Request recebida:", req.method);
   if (req.method === "OPTIONS") {
     return optionsResponse();
   }
@@ -135,3 +135,6 @@ serve(async (req) => {
     );
   }
 });
+
+
+

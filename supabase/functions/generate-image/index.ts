@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   AGENTE_4_OTIMIZADOR_PROMPT,
@@ -90,7 +89,8 @@ async function generateWithLeonardo(
   throw new Error("Leonardo: timeout na geraÃ§Ã£o (60s)");
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
+  console.log("Request recebida:", req.method);
   if (req.method === "OPTIONS") {
     return optionsResponse();
   }
@@ -269,3 +269,6 @@ serve(async (req) => {
     );
   }
 });
+
+
+

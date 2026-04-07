@@ -1,9 +1,10 @@
 // supabase/functions/_shared/cors.ts
+import { corsHeaders as supabaseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 export const corsHeaders = {
+  ...supabaseCorsHeaders,
   "Access-Control-Allow-Origin": "https://infusion-ia.vercel.app",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, content-type, apikey",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 

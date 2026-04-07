@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   AGENTE_1_CONSULTOR_MARKETING,
@@ -9,7 +8,8 @@ import {
 import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 import { log, logError } from "../_shared/monitoring.ts";
 
-serve(async (req) => {
+Deno.serve(async (req) => {
+  console.log("Request recebida:", req.method);
   if (req.method === "OPTIONS") {
     return optionsResponse();
   }
@@ -175,3 +175,6 @@ serve(async (req) => {
     );
   }
 });
+
+
+
