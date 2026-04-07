@@ -1,4 +1,4 @@
-import { getAuthToken } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
 
 const DEFAULT_API_BASE = "https://infusion-ia.onrender.com";
 
@@ -17,7 +17,8 @@ export async function fetchFunctions(
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const base = buildBaseUrl();
   const headers = new Headers(init?.headers || {});
-  const token = getAuthToken();
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
   if (token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
   }

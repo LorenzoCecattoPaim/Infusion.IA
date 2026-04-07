@@ -7,11 +7,9 @@
     buildCommand: npm install
     startCommand: npm start
     envVars:
-      - key: DATABASE_URL
+      - key: SUPABASE_URL
         sync: false
-      - key: DATABASE_SSL
-        sync: false
-      - key: JWT_SECRET
+      - key: SERVICE_ROLE_KEY
         sync: false
       - key: CORS_ORIGIN
         sync: false

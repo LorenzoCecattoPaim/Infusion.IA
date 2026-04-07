@@ -6,7 +6,7 @@ Hub de marketing com Inteligência Artificial para pequenas e médias empresas b
 
 - **Frontend:** Vite + React 18 + TypeScript + Tailwind CSS + shadcn/ui
 - **Backend:** Node.js + Express (Render)
-- **Banco:** PostgreSQL direto
+- **Banco:** Supabase (Postgres + Auth)
 - **IA:** OpenAI API (GPT-4o) — 5 agentes especializados
 - **Imagens:** Leonardo AI
 
@@ -14,8 +14,7 @@ Hub de marketing com Inteligência Artificial para pequenas e médias empresas b
 
 ### 1. Pré-requisitos
 - Node.js 18+
-- Postgres disponível (local ou remoto)
-- Conta no OpenAI e Leonardo AI
+- Conta no Supabase, OpenAI e Leonardo AI
 
 ### 2. Instalação
 ```bash
@@ -26,13 +25,7 @@ cp .env.example .env
 # Preencha .env com suas chaves
 ```
 
-### 3. Banco de dados
-Execute o schema em seu Postgres:
-```
-backend/schema.sql
-```
-
-### 4. Rodar localmente
+### 3. Rodar localmente
 ```bash
 npm run dev
 ```
@@ -40,9 +33,6 @@ npm run dev
 ## Backend (Render)
 
 Endpoints principais:
-- `POST /auth/login`
-- `POST /auth/register`
-- `GET /auth/me`
 - `GET /credits`
 - `GET /profile` / `PUT /profile`
 - `POST /ai-chat`

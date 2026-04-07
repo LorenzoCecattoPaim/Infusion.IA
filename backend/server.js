@@ -2,7 +2,7 @@
 import express from "express";
 import cors from "cors";
 import { Readable } from "node:stream";
-import { query } from "./db.js";
+import { createClient } from "@supabase/supabase-js";
 import {
   AGENTE_1_CONSULTOR_MARKETING,
   AGENTE_2_DESIGNER_LOGO,
@@ -16,9 +16,21 @@ import {
   safeParseJSON,
   validateWithAgent,
 } from "./ai.js";
-import { hashPassword, requireAuth, signToken, verifyPassword } from "./auth.js";
 
 const app = express();
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SERVICE_ROLE_KEY = process.env.SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+  throw new Error("SUPABASE_URL e SERVICE_ROLE_KEY são obrigatórios");
+}
+
+function getSupabase() {
+  return createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
@@ -42,137 +54,42 @@ function sendError(res, status, message) {
   res.status(status).json({ error: message });
 }
 
-async function getUserByEmail(email) {
-  const { rows } = await query("SELECT id, email, password_hash FROM users WHERE email = $1", [
-    email,
-  ]);
-  return rows[0] || null;
+function getBearerToken(req) {
+  const authHeader = req.headers.authorization || req.headers.Authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+  const token = authHeader.slice("Bearer ".length).trim();
+  return token || null;
 }
 
-async function getUserById(id) {
-  const { rows } = await query("SELECT id, email FROM users WHERE id = $1", [id]);
-  return rows[0] || null;
-}
-
-async function ensureCreditsRow(userId) {
-  const { rows } = await query(
-    "SELECT credits, plan FROM user_credits WHERE user_id = $1",
-    [userId]
-  );
-  if (rows[0]) return rows[0];
-  const { rows: inserted } = await query(
-    "INSERT INTO user_credits (user_id, credits, plan, updated_at) VALUES ($1, $2, $3, NOW()) RETURNING credits, plan",
-    [userId, 10, "free"]
-  );
-  return inserted[0];
-}
-
-async function getProfile(userId) {
-  const { rows } = await query("SELECT * FROM business_profiles WHERE user_id = $1", [
-    userId,
-  ]);
-  return rows[0] || null;
-}
-
-async function upsertProfile(userId, updates) {
-  const payload = JSON.stringify(updates ?? {});
-  const current = await getProfile(userId);
-  if (current?.id) {
-    const { rows } = await query(
-      "UPDATE business_profiles SET data = data || $1::jsonb, updated_at = NOW() WHERE user_id = $2 RETURNING *",
-      [payload, userId]
-    );
-    return rows[0];
+async function requireAuth(req, res, next) {
+  const token = getBearerToken(req);
+  if (!token) {
+    sendError(res, 401, "Unauthorized");
+    return;
   }
-  const { rows } = await query(
-    "INSERT INTO business_profiles (user_id, data, created_at, updated_at) VALUES ($1, $2::jsonb, NOW(), NOW()) RETURNING *",
-    [userId, payload]
-  );
-  return rows[0];
-}
-
-function flattenProfile(row) {
-  if (!row) return null;
-  if (row.data) return { id: row.id, user_id: row.user_id, ...row.data };
-  return row;
+  const supabase = getSupabase();
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) {
+    sendError(res, 401, "Unauthorized");
+    return;
+  }
+  req.user = user;
+  next();
 }
 
 app.get("/health", (_req, res) => {
   sendSuccess(res, { ok: true });
 });
-app.post("/auth/register", async (req, res) => {
-  try {
-    const { email, password } = req.body || {};
-    if (!email || !password) {
-      return sendError(res, 400, "E-mail e senha são obrigatórios.");
-    }
-
-    const existing = await getUserByEmail(email);
-    if (existing) {
-      return sendError(res, 409, "Este e-mail já está cadastrado.");
-    }
-
-    const passwordHash = await hashPassword(password);
-    const { rows } = await query(
-      "INSERT INTO users (email, password_hash, created_at) VALUES ($1, $2, NOW()) RETURNING id, email",
-      [email, passwordHash]
-    );
-    const user = rows[0];
-    await ensureCreditsRow(user.id);
-    const token = signToken(user);
-    return sendSuccess(res, { token, user });
-  } catch (error) {
-    console.error("[AUTH] register error", error);
-    return sendError(res, 500, "Erro ao registrar usuário.");
-  }
-});
-
-app.post("/auth/login", async (req, res) => {
-  try {
-    const { email, password } = req.body || {};
-    if (!email || !password) {
-      return sendError(res, 400, "E-mail e senha são obrigatórios.");
-    }
-
-    const user = await getUserByEmail(email);
-    if (!user) {
-      return sendError(res, 401, "E-mail ou senha inválidos.");
-    }
-
-    const ok = await verifyPassword(password, user.password_hash);
-    if (!ok) {
-      return sendError(res, 401, "E-mail ou senha inválidos.");
-    }
-
-    const token = signToken(user);
-    return sendSuccess(res, { token, user: { id: user.id, email: user.email } });
-  } catch (error) {
-    console.error("[AUTH] login error", error);
-    return sendError(res, 500, "Erro ao autenticar.");
-  }
-});
-
-app.get("/auth/me", requireAuth, async (req, res) => {
-  try {
-    const user = await getUserById(req.user.id);
-    if (!user) {
-      return sendError(res, 401, "Unauthorized");
-    }
-    return sendSuccess(res, { user });
-  } catch (error) {
-    console.error("[AUTH] me error", error);
-    return sendError(res, 500, "Erro ao carregar sessão.");
-  }
-});
-
-app.post("/auth/logout", (_req, res) => {
-  sendSuccess(res, { ok: true });
-});
-
 app.get("/credits", requireAuth, async (req, res) => {
   try {
-    const credits = await ensureCreditsRow(req.user.id);
-    return sendSuccess(res, credits);
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("user_credits")
+      .select("credits, plan")
+      .eq("user_id", req.user.id)
+      .single();
+    if (error) throw error;
+    return sendSuccess(res, data || { credits: 0, plan: "free" });
   } catch (error) {
     console.error("[CREDITS] error", error);
     return sendError(res, 500, "Erro ao carregar créditos.");
@@ -181,25 +98,37 @@ app.get("/credits", requireAuth, async (req, res) => {
 
 app.get("/dashboard-stats", requireAuth, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const supabase = getSupabase();
     const [posts, images, logos, credits] = await Promise.all([
-      query("SELECT COUNT(*)::int AS count FROM generated_posts WHERE user_id = $1", [
-        userId,
-      ]),
-      query("SELECT COUNT(*)::int AS count FROM generated_images WHERE user_id = $1", [
-        userId,
-      ]),
-      query("SELECT COUNT(*)::int AS count FROM generated_logos WHERE user_id = $1", [
-        userId,
-      ]),
-      query("SELECT credits FROM user_credits WHERE user_id = $1", [userId]),
+      supabase
+        .from("generated_posts")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", req.user.id),
+      supabase
+        .from("generated_images")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", req.user.id),
+      supabase
+        .from("generated_logos")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", req.user.id),
+      supabase
+        .from("user_credits")
+        .select("credits")
+        .eq("user_id", req.user.id)
+        .maybeSingle(),
     ]);
 
+    if (posts.error) throw posts.error;
+    if (images.error) throw images.error;
+    if (logos.error) throw logos.error;
+    if (credits.error) throw credits.error;
+
     return sendSuccess(res, {
-      posts_generated: posts.rows[0]?.count ?? 0,
-      images_generated: images.rows[0]?.count ?? 0,
-      logos_generated: logos.rows[0]?.count ?? 0,
-      credits: credits.rows[0]?.credits ?? 0,
+      posts_generated: posts.count ?? 0,
+      images_generated: images.count ?? 0,
+      logos_generated: logos.count ?? 0,
+      credits: credits.data?.credits ?? 0,
     });
   } catch (error) {
     console.error("[DASHBOARD] error", error);
@@ -209,11 +138,15 @@ app.get("/dashboard-stats", requireAuth, async (req, res) => {
 
 app.get("/generated-images", requireAuth, async (req, res) => {
   try {
-    const { rows } = await query(
-      "SELECT id, url, prompt, optimized_prompt, negative_prompt, quality, created_at FROM generated_images WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50",
-      [req.user.id]
-    );
-    return sendSuccess(res, { images: rows });
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("generated_images")
+      .select("*")
+      .eq("user_id", req.user.id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    return sendSuccess(res, { images: data || [] });
   } catch (error) {
     console.error("[IMAGES] error", error);
     return sendError(res, 500, "Erro ao carregar imagens.");
@@ -222,8 +155,14 @@ app.get("/generated-images", requireAuth, async (req, res) => {
 
 app.get("/profile", requireAuth, async (req, res) => {
   try {
-    const profile = await getProfile(req.user.id);
-    return sendSuccess(res, { profile: flattenProfile(profile) });
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("business_profiles")
+      .select("*")
+      .eq("user_id", req.user.id)
+      .maybeSingle();
+    if (error) throw error;
+    return sendSuccess(res, { profile: data || null });
   } catch (error) {
     console.error("[PROFILE] error", error);
     return sendError(res, 500, "Erro ao carregar perfil.");
@@ -232,9 +171,36 @@ app.get("/profile", requireAuth, async (req, res) => {
 
 app.put("/profile", requireAuth, async (req, res) => {
   try {
+    const supabase = getSupabase();
     const updates = req.body || {};
-    const updated = await upsertProfile(req.user.id, updates);
-    return sendSuccess(res, { profile: flattenProfile(updated) });
+    const { data: existing, error: existingError } = await supabase
+      .from("business_profiles")
+      .select("id")
+      .eq("user_id", req.user.id)
+      .maybeSingle();
+    if (existingError) throw existingError;
+
+    let saved;
+    if (existing?.id) {
+      const { data, error } = await supabase
+        .from("business_profiles")
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq("user_id", req.user.id)
+        .select("*")
+        .maybeSingle();
+      if (error) throw error;
+      saved = data;
+    } else {
+      const { data, error } = await supabase
+        .from("business_profiles")
+        .insert({ ...updates, user_id: req.user.id })
+        .select("*")
+        .single();
+      if (error) throw error;
+      saved = data;
+    }
+
+    return sendSuccess(res, { profile: saved });
   } catch (error) {
     console.error("[PROFILE] update error", error);
     return sendError(res, 500, "Erro ao salvar perfil.");
@@ -243,11 +209,15 @@ app.put("/profile", requireAuth, async (req, res) => {
 
 app.get("/chat/conversations", requireAuth, async (req, res) => {
   try {
-    const { rows } = await query(
-      "SELECT id, title, updated_at FROM chat_conversations WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 5",
-      [req.user.id]
-    );
-    return sendSuccess(res, { conversations: rows });
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("chat_conversations")
+      .select("id, title, updated_at")
+      .eq("user_id", req.user.id)
+      .order("updated_at", { ascending: false })
+      .limit(5);
+    if (error) throw error;
+    return sendSuccess(res, { conversations: data || [] });
   } catch (error) {
     console.error("[CHAT] conversations error", error);
     return sendError(res, 500, "Erro ao carregar conversas.");
@@ -256,12 +226,15 @@ app.get("/chat/conversations", requireAuth, async (req, res) => {
 
 app.post("/chat/conversations", requireAuth, async (req, res) => {
   try {
+    const supabase = getSupabase();
     const { title } = req.body || {};
-    const { rows } = await query(
-      "INSERT INTO chat_conversations (user_id, title, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING id",
-      [req.user.id, title || null]
-    );
-    return sendSuccess(res, { id: rows[0]?.id });
+    const { data, error } = await supabase
+      .from("chat_conversations")
+      .insert({ user_id: req.user.id, title })
+      .select("id")
+      .single();
+    if (error) throw error;
+    return sendSuccess(res, { id: data?.id });
   } catch (error) {
     console.error("[CHAT] create conversation error", error);
     return sendError(res, 500, "Erro ao criar conversa.");
@@ -270,12 +243,15 @@ app.post("/chat/conversations", requireAuth, async (req, res) => {
 
 app.get("/chat/conversations/:id/messages", requireAuth, async (req, res) => {
   try {
-    const conversationId = req.params.id;
-    const { rows } = await query(
-      "SELECT id, role, content, created_at FROM chat_messages WHERE conversation_id = $1 AND user_id = $2 ORDER BY created_at ASC",
-      [conversationId, req.user.id]
-    );
-    return sendSuccess(res, { messages: rows });
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("chat_messages")
+      .select("id, role, content, created_at")
+      .eq("conversation_id", req.params.id)
+      .eq("user_id", req.user.id)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return sendSuccess(res, { messages: data || [] });
   } catch (error) {
     console.error("[CHAT] messages error", error);
     return sendError(res, 500, "Erro ao carregar mensagens.");
@@ -284,19 +260,24 @@ app.get("/chat/conversations/:id/messages", requireAuth, async (req, res) => {
 
 app.post("/chat/conversations/:id/messages", requireAuth, async (req, res) => {
   try {
-    const conversationId = req.params.id;
+    const supabase = getSupabase();
     const { role, content } = req.body || {};
     if (!role || !content) {
       return sendError(res, 400, "role e content são obrigatórios.");
     }
-    await query(
-      "INSERT INTO chat_messages (conversation_id, user_id, role, content, created_at) VALUES ($1, $2, $3, $4, NOW())",
-      [conversationId, req.user.id, role, content]
-    );
-    await query(
-      "UPDATE chat_conversations SET updated_at = NOW() WHERE id = $1 AND user_id = $2",
-      [conversationId, req.user.id]
-    );
+    const { error } = await supabase.from("chat_messages").insert({
+      conversation_id: req.params.id,
+      user_id: req.user.id,
+      role,
+      content,
+    });
+    if (error) throw error;
+
+    await supabase
+      .from("chat_conversations")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", req.params.id);
+
     return sendSuccess(res, { ok: true });
   } catch (error) {
     console.error("[CHAT] persist message error", error);
@@ -305,8 +286,8 @@ app.post("/chat/conversations/:id/messages", requireAuth, async (req, res) => {
 });
 app.post("/ai-chat", requireAuth, async (req, res) => {
   const startTime = Date.now();
-  const userId = req.user.id;
   try {
+    const supabase = getSupabase();
     const { messages = [], stream = false, lastMessageOverride } = req.body || {};
     if (!Array.isArray(messages) || messages.length === 0) {
       return sendError(res, 400, "messages array is required");
@@ -323,26 +304,34 @@ app.post("/ai-chat", requireAuth, async (req, res) => {
       }
     }
 
-    const creditsRes = await query(
-      "SELECT credits FROM user_credits WHERE user_id = $1",
-      [userId]
-    );
-    const credits = creditsRes.rows[0];
-    if (!credits || credits.credits < 1) {
+    const { data: credits, error: creditsError } = await supabase
+      .from("user_credits")
+      .select("credits")
+      .eq("user_id", req.user.id)
+      .single();
+
+    if (creditsError || !credits || credits.credits < 1) {
       return sendError(res, 402, "insufficient_credits");
     }
 
-    const profile = await getProfile(userId);
-    const { rows: materials } = await query(
-      "SELECT content, name FROM business_materials WHERE user_id = $1 LIMIT 5",
-      [userId]
-    );
+    const { data: profile } = await supabase
+      .from("business_profiles")
+      .select("*")
+      .eq("user_id", req.user.id)
+      .maybeSingle();
+
+    const { data: materials } = await supabase
+      .from("business_materials")
+      .select("content, name")
+      .eq("user_id", req.user.id)
+      .limit(5);
+
     const materialsContext =
       materials?.map((m) => `[${m.name}]:\n${m.content}`).join("\n\n") || "";
 
     const systemPrompt = renderBusinessPrompt(
       AGENTE_1_CONSULTOR_MARKETING,
-      flattenProfile(profile),
+      profile || null,
       materialsContext
     );
 
@@ -354,10 +343,10 @@ app.post("/ai-chat", requireAuth, async (req, res) => {
       }
     }
 
-    await query(
-      "UPDATE user_credits SET credits = credits - 1, updated_at = NOW() WHERE user_id = $1",
-      [userId]
-    );
+    await supabase
+      .from("user_credits")
+      .update({ credits: credits.credits - 1, updated_at: new Date().toISOString() })
+      .eq("user_id", req.user.id);
 
     const model = process.env.AI_MODEL_MARKETING || "gpt-4o";
     const agentMessages = processedMessages.map((m) => ({
@@ -403,8 +392,8 @@ app.post("/ai-chat", requireAuth, async (req, res) => {
 
 app.post("/generate-posts", requireAuth, async (req, res) => {
   const startTime = Date.now();
-  const userId = req.user.id;
   try {
+    const supabase = getSupabase();
     const body = req.body || {};
     const brief = typeof body.brief === "string" ? body.brief : "";
     const rawChannels = body.channels || (body.canal ? [body.canal] : ["Instagram"]);
@@ -421,15 +410,21 @@ app.post("/generate-posts", requireAuth, async (req, res) => {
 
     if (!channels?.length) return sendError(res, 400, "canal é obrigatório");
 
-    const { rows: creditRows } = await query(
-      "SELECT credits FROM user_credits WHERE user_id = $1",
-      [userId]
-    );
-    if (!creditRows[0] || creditRows[0].credits < 2) {
+    const { data: credits } = await supabase
+      .from("user_credits")
+      .select("credits")
+      .eq("user_id", req.user.id)
+      .single();
+
+    if (!credits || credits.credits < 2) {
       return sendError(res, 402, "insufficient_credits");
     }
 
-    const profile = await getProfile(userId);
+    const { data: profile } = await supabase
+      .from("business_profiles")
+      .select("*")
+      .eq("user_id", req.user.id)
+      .maybeSingle();
 
     const validation = await validateWithAgent(
       [brief, objetivo, tipoConteudo, channels.join(", ")].join(" | ")
@@ -440,7 +435,7 @@ app.post("/generate-posts", requireAuth, async (req, res) => {
 
     const systemPrompt = renderBusinessPrompt(
       AGENTE_3_GERADOR_POSTS,
-      flattenProfile(profile),
+      profile || null,
       ""
     );
 
@@ -472,38 +467,24 @@ Gere um post para cada canal solicitado. Responda apenas com JSON válido.`.trim
     }
 
     if (parsed.posts?.length) {
-      const inserts = parsed.posts.map((post) => ({
-        user_id: userId,
-        canal: String(post.canal || channels[0]),
-        objetivo: String(post.objetivo || objetivo),
-        tipo_conteudo: String(post.tipo_conteudo || tipoConteudo),
-        texto_pronto: String(post.texto_pronto || post.texto || ""),
-        cta: String(post.cta || ""),
-        sugestao_visual: String(post.sugestao_visual || ""),
-        payload_json: post,
-      }));
-
-      for (const item of inserts) {
-        await query(
-          "INSERT INTO generated_posts (user_id, canal, objetivo, tipo_conteudo, texto_pronto, cta, sugestao_visual, payload_json, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())",
-          [
-            item.user_id,
-            item.canal,
-            item.objetivo,
-            item.tipo_conteudo,
-            item.texto_pronto,
-            item.cta,
-            item.sugestao_visual,
-            item.payload_json,
-          ]
-        );
-      }
+      await supabase.from("generated_posts").insert(
+        parsed.posts.map((post) => ({
+          user_id: req.user.id,
+          canal: String(post.canal || channels[0]),
+          objetivo: String(post.objetivo || objetivo),
+          tipo_conteudo: String(post.tipo_conteudo || tipoConteudo),
+          texto_pronto: String(post.texto_pronto || post.texto || ""),
+          cta: String(post.cta || ""),
+          sugestao_visual: String(post.sugestao_visual || ""),
+          payload_json: post,
+        }))
+      );
     }
 
-    await query(
-      "UPDATE user_credits SET credits = credits - 2, updated_at = NOW() WHERE user_id = $1",
-      [userId]
-    );
+    await supabase
+      .from("user_credits")
+      .update({ credits: credits.credits - 2, updated_at: new Date().toISOString() })
+      .eq("user_id", req.user.id);
 
     console.log("generate-posts duration", Date.now() - startTime);
     return sendSuccess(res, parsed);
@@ -515,8 +496,8 @@ Gere um post para cada canal solicitado. Responda apenas com JSON válido.`.trim
 
 app.post("/generate-text", requireAuth, async (req, res) => {
   const startTime = Date.now();
-  const userId = req.user.id;
   try {
+    const supabase = getSupabase();
     const {
       tipo_conteudo,
       descricao,
@@ -531,15 +512,21 @@ app.post("/generate-text", requireAuth, async (req, res) => {
       return sendError(res, 400, "tipo_conteudo e descricao são obrigatórios");
     }
 
-    const { rows: creditRows } = await query(
-      "SELECT credits FROM user_credits WHERE user_id = $1",
-      [userId]
-    );
-    if (!creditRows[0] || creditRows[0].credits < 1) {
+    const { data: credits } = await supabase
+      .from("user_credits")
+      .select("credits")
+      .eq("user_id", req.user.id)
+      .single();
+
+    if (!credits || credits.credits < 1) {
       return sendError(res, 402, "insufficient_credits");
     }
 
-    const profile = await getProfile(userId);
+    const { data: profile } = await supabase
+      .from("business_profiles")
+      .select("*")
+      .eq("user_id", req.user.id)
+      .maybeSingle();
 
     const validation = await validateWithAgent(
       [tipo_conteudo, descricao, publico_alvo, tom_voz].join(" | ")
@@ -550,7 +537,7 @@ app.post("/generate-text", requireAuth, async (req, res) => {
 
     const systemPrompt = renderBusinessPrompt(
       AGENTE_6_GERADOR_TEXTO,
-      flattenProfile(profile),
+      profile || null,
       ""
     );
 
@@ -600,10 +587,10 @@ Gere o conteúdo solicitado respeitando o limite quando aplicável. Responda ape
       );
     }
 
-    await query(
-      "UPDATE user_credits SET credits = credits - 1, updated_at = NOW() WHERE user_id = $1",
-      [userId]
-    );
+    await supabase
+      .from("user_credits")
+      .update({ credits: credits.credits - 1, updated_at: new Date().toISOString() })
+      .eq("user_id", req.user.id);
 
     console.log("generate-text duration", Date.now() - startTime);
     return sendSuccess(res, parsed);
@@ -615,8 +602,8 @@ Gere o conteúdo solicitado respeitando o limite quando aplicável. Responda ape
 
 app.post("/generate-post-prompt", requireAuth, async (req, res) => {
   const startTime = Date.now();
-  const userId = req.user.id;
   try {
+    const supabase = getSupabase();
     const { tipo_post, descricao, formato, estilo, incluir_espaco_logo, logo_presente } =
       req.body || {};
 
@@ -631,10 +618,15 @@ app.post("/generate-post-prompt", requireAuth, async (req, res) => {
       return sendError(res, 400, `Conteúdo não permitido: ${validation.motivo_rejeicao}`);
     }
 
-    const profile = await getProfile(userId);
+    const { data: profile } = await supabase
+      .from("business_profiles")
+      .select("*")
+      .eq("user_id", req.user.id)
+      .maybeSingle();
+
     const systemPrompt = renderBusinessPrompt(
       AGENTE_7_GERADOR_POSTS_IMAGEM,
-      flattenProfile(profile),
+      profile || null,
       ""
     );
 
@@ -734,18 +726,20 @@ async function generateWithLeonardo(prompt, negativePrompt, quality, width, heig
 
 app.post("/generate-image", requireAuth, async (req, res) => {
   const startTime = Date.now();
-  const userId = req.user.id;
   try {
+    const supabase = getSupabase();
     const { prompt, quality = "standard", template, format } = req.body || {};
     if (!prompt?.trim()) return sendError(res, 400, "prompt é obrigatório");
 
     const creditCost = quality === "premium" ? 10 : 5;
 
-    const { rows: creditRows } = await query(
-      "SELECT credits FROM user_credits WHERE user_id = $1",
-      [userId]
-    );
-    if (!creditRows[0] || creditRows[0].credits < creditCost) {
+    const { data: credits } = await supabase
+      .from("user_credits")
+      .select("credits")
+      .eq("user_id", req.user.id)
+      .single();
+
+    if (!credits || credits.credits < creditCost) {
       return sendError(res, 402, "insufficient_credits");
     }
 
@@ -810,24 +804,32 @@ app.post("/generate-image", requireAuth, async (req, res) => {
       ),
     ]);
 
-    await query(
-      "UPDATE user_credits SET credits = credits - $1, updated_at = NOW() WHERE user_id = $2",
-      [creditCost, userId]
-    );
+    await supabase
+      .from("user_credits")
+      .update({ credits: credits.credits - creditCost, updated_at: new Date().toISOString() })
+      .eq("user_id", req.user.id);
 
-    const { rows: savedImages } = await query(
-      "INSERT INTO generated_images (user_id, url, prompt, optimized_prompt, negative_prompt, quality, created_at) VALUES ($1, $2, $3, $4, $5, $6, NOW()), ($1, $7, $3, $8, $5, $6, NOW()) RETURNING id, url, prompt, optimized_prompt, negative_prompt, quality, created_at",
-      [
-        userId,
-        url1,
-        prompt,
-        optimized.prompt_1,
-        optimized.negative_prompt,
-        quality,
-        url2,
-        optimized.prompt_2,
-      ]
-    );
+    const { data: savedImages } = await supabase
+      .from("generated_images")
+      .insert([
+        {
+          user_id: req.user.id,
+          url: url1,
+          prompt,
+          optimized_prompt: optimized.prompt_1,
+          negative_prompt: optimized.negative_prompt,
+          quality,
+        },
+        {
+          user_id: req.user.id,
+          url: url2,
+          prompt,
+          optimized_prompt: optimized.prompt_2,
+          negative_prompt: optimized.negative_prompt,
+          quality,
+        },
+      ])
+      .select();
 
     console.log("generate-image duration", Date.now() - startTime);
     return sendSuccess(res, { images: savedImages, style_notes: optimized.style_notes });
@@ -905,8 +907,8 @@ async function buildLogoPrompts(conversation) {
 
 app.post("/logo-generator", requireAuth, async (req, res) => {
   const startTime = Date.now();
-  const userId = req.user.id;
   try {
+    const supabase = getSupabase();
     const { messages, action, selectedPrompt } = req.body || {};
     if (!Array.isArray(messages) || messages.length === 0) {
       return sendError(res, 400, "messages é obrigatório");
@@ -918,19 +920,25 @@ app.post("/logo-generator", requireAuth, async (req, res) => {
       return sendError(res, 400, "messages é obrigatório");
     }
 
-    const { rows: creditRows } = await query(
-      "SELECT credits FROM user_credits WHERE user_id = $1",
-      [userId]
-    );
-    if (!creditRows[0] || creditRows[0].credits < 1) {
+    const { data: credits } = await supabase
+      .from("user_credits")
+      .select("credits")
+      .eq("user_id", req.user.id)
+      .single();
+
+    if (!credits || credits.credits < 1) {
       return sendError(res, 402, "insufficient_credits");
     }
 
-    const profile = await getProfile(userId);
+    const { data: profile } = await supabase
+      .from("business_profiles")
+      .select("*")
+      .eq("user_id", req.user.id)
+      .maybeSingle();
 
     if (action === "generate_logos") {
       const cost = 3 * 5;
-      if (creditRows[0].credits < cost) {
+      if (credits.credits < cost) {
         return sendError(res, 402, "insufficient_credits");
       }
 
@@ -955,17 +963,20 @@ app.post("/logo-generator", requireAuth, async (req, res) => {
         prompt: prompts[i],
       }));
 
-      for (const logo of logos) {
-        await query(
-          "INSERT INTO generated_logos (user_id, url, prompt, description, variation_type, created_at) VALUES ($1, $2, $3, $4, $5, NOW())",
-          [userId, logo.url, logo.prompt, logo.description, "base"]
-        );
-      }
-
-      await query(
-        "UPDATE user_credits SET credits = credits - $1, updated_at = NOW() WHERE user_id = $2",
-        [cost, userId]
+      await supabase.from("generated_logos").insert(
+        logos.map((logo) => ({
+          user_id: req.user.id,
+          url: logo.url,
+          prompt: logo.prompt,
+          description: logo.description,
+          variation_type: "base",
+        }))
       );
+
+      await supabase
+        .from("user_credits")
+        .update({ credits: credits.credits - cost, updated_at: new Date().toISOString() })
+        .eq("user_id", req.user.id);
 
       return sendSuccess(res, {
         message: "Aqui estão suas três sugestões de logo! Qual delas você mais gostou?",
@@ -984,7 +995,7 @@ app.post("/logo-generator", requireAuth, async (req, res) => {
         "white logo on black background",
       ];
       const cost = variations.length * 5;
-      if (creditRows[0].credits < cost) {
+      if (credits.credits < cost) {
         return sendError(res, 402, "insufficient_credits");
       }
 
@@ -998,17 +1009,20 @@ app.post("/logo-generator", requireAuth, async (req, res) => {
         prompt: variationPrompts[i],
       }));
 
-      for (const logo of logos) {
-        await query(
-          "INSERT INTO generated_logos (user_id, url, prompt, description, variation_type, created_at) VALUES ($1, $2, $3, $4, $5, NOW())",
-          [userId, logo.url, logo.prompt, logo.description, "variation"]
-        );
-      }
-
-      await query(
-        "UPDATE user_credits SET credits = credits - $1, updated_at = NOW() WHERE user_id = $2",
-        [cost, userId]
+      await supabase.from("generated_logos").insert(
+        logos.map((logo) => ({
+          user_id: req.user.id,
+          url: logo.url,
+          prompt: logo.prompt,
+          description: logo.description,
+          variation_type: "variation",
+        }))
       );
+
+      await supabase
+        .from("user_credits")
+        .update({ credits: credits.credits - cost, updated_at: new Date().toISOString() })
+        .eq("user_id", req.user.id);
 
       return sendSuccess(res, { message: "Aqui estão as variações do seu logo!", logos });
     }
@@ -1017,7 +1031,7 @@ app.post("/logo-generator", requireAuth, async (req, res) => {
       return sendError(res, 400, "Ação inválida");
     }
 
-    if (creditRows[0].credits < 2) {
+    if (credits.credits < 2) {
       return sendError(res, 402, "insufficient_credits");
     }
 
@@ -1031,7 +1045,7 @@ app.post("/logo-generator", requireAuth, async (req, res) => {
 
     const systemPrompt = renderBusinessPrompt(
       AGENTE_2_DESIGNER_LOGO,
-      flattenProfile(profile),
+      profile || null,
       ""
     );
 
@@ -1046,10 +1060,10 @@ app.post("/logo-generator", requireAuth, async (req, res) => {
       temperature: 0.8,
     });
 
-    await query(
-      "UPDATE user_credits SET credits = credits - 2, updated_at = NOW() WHERE user_id = $1",
-      [userId]
-    );
+    await supabase
+      .from("user_credits")
+      .update({ credits: credits.credits - 2, updated_at: new Date().toISOString() })
+      .eq("user_id", req.user.id);
 
     console.log("logo-generator duration", Date.now() - startTime);
     return sendSuccess(res, { message: agentText, logos: [] });
