@@ -44,7 +44,7 @@ export default function TextGeneratorPage() {
 
   const handleGenerate = async (opts?: { variation?: boolean; refine?: boolean }) => {
     if (!descricao.trim()) {
-      toast.error("Descreva o que vocÃª quer gerar.");
+      toast.error("Descreva o que você quer gerar.");
       return;
     }
 
@@ -95,11 +95,11 @@ export default function TextGeneratorPage() {
               <Sparkles className="h-6 w-6 text-primary" /> Gerador de Texto
             </h1>
             <p className="text-muted-foreground mt-1">
-              Crie legendas, tÃ­tulos, descriÃ§Ãµes e prompts prontos para IA.
+              Crie legendas, títulos, descrições e prompts prontos para IA.
             </p>
           </div>
           <div className="text-xs text-muted-foreground">
-            {credits} crÃ©ditos disponÃ­veis
+            {credits} créditos disponíveis
           </div>
         </div>
 
@@ -109,9 +109,9 @@ export default function TextGeneratorPage() {
               <Lightbulb className="h-4 w-4 text-primary-foreground" />
             </div>
             <div>
-              <p className="text-sm text-foreground font-medium">Dica rÃ¡pida</p>
+              <p className="text-sm text-foreground font-medium">Dica rápida</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Para gerar imagens mais precisas, vocÃª pode primeiro criar um prompt detalhado aqui e depois usÃ¡-lo no Gerador de Posts. Quanto mais especÃ­fico (cores, estilo, cenÃ¡rio, iluminaÃ§Ã£o), melhor serÃ¡ o resultado da IA.
+                Para gerar imagens mais precisas, você pode primeiro criar um prompt detalhado aqui e depois usá-lo no Gerador de Posts. Quanto mais específico (cores, estilo, cenário, iluminação), melhor será o resultado da IA.
               </p>
             </div>
           </CardContent>
@@ -124,7 +124,7 @@ export default function TextGeneratorPage() {
             </CardHeader>
             <CardContent className="p-6 space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Tipo de conteÃºdo</label>
+                <label className="text-sm font-medium text-foreground">Tipo de conteúdo</label>
                 <Select value={tipo} onValueChange={setTipo}>
                   <SelectTrigger className="bg-secondary border-border">
                     <SelectValue placeholder="Selecione" />
@@ -145,17 +145,17 @@ export default function TextGeneratorPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Descreva o que vocÃª quer gerar</label>
+                <label className="text-sm font-medium text-foreground">Descreva o que você quer gerar</label>
                 <Textarea
                   value={descricao}
                   onChange={(e) => setDescricao(e.target.value)}
-                  placeholder="Descreva o que vocÃª quer gerar..."
+                  placeholder="Descreva o que você quer gerar..."
                   className="min-h-[140px] bg-secondary border-border"
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">PÃºblico-alvo (opcional)</label>
+                <label className="text-sm font-medium text-foreground">Público-alvo (opcional)</label>
                 <Input
                   value={publico}
                   onChange={(e) => setPublico(e.target.value)}
@@ -228,7 +228,7 @@ export default function TextGeneratorPage() {
                     onClick={() => handleGenerate({ variation: true })}
                     disabled={loading}
                   >
-                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Gerar variaÃ§Ã£o
+                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Gerar variação
                   </Button>
                   <Button
                     size="sm"
@@ -265,7 +265,7 @@ export default function TextGeneratorPage() {
                   </div>
 
                   <div className="border border-border rounded-xl p-4 bg-secondary/20 space-y-2">
-                    <p className="text-xs text-muted-foreground">SugestÃµes de melhoria</p>
+                    <p className="text-xs text-muted-foreground">Sugestões de melhoria</p>
                     {result.sugestoes?.length ? (
                       <ul className="space-y-1 text-sm text-foreground">
                         {result.sugestoes.map((item, idx) => (
@@ -273,7 +273,7 @@ export default function TextGeneratorPage() {
                         ))}
                       </ul>
                     ) : (
-                      <p className="text-sm text-muted-foreground">Nenhuma sugestÃ£o retornada.</p>
+                      <p className="text-sm text-muted-foreground">Nenhuma sugestão retornada.</p>
                     )}
                   </div>
 
@@ -303,7 +303,7 @@ export default function TextGeneratorPage() {
         {history.length > 0 && (
           <Card className="bg-card border-border shadow-card">
             <CardHeader className="border-b border-border">
-              <CardTitle className="font-display text-foreground">HistÃ³rico de geraÃ§Ãµes</CardTitle>
+              <CardTitle className="font-display text-foreground">Histórico de gerações</CardTitle>
             </CardHeader>
             <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               {history.map((item) => (

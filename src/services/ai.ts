@@ -75,7 +75,7 @@ export async function generateText(
   payload: GenerateTextPayload
 ): Promise<GenerateTextResponse> {
   const token = await getAuthToken();
-  if (!token) throw new Error("UsuÃ¡rio nÃ£o autenticado");
+  if (!token) throw new Error("Usuário não autenticado");
 
   const res = await fetch(`${getBaseUrl()}/functions/v1/generate-text`, {
     method: "POST",
@@ -88,7 +88,7 @@ export async function generateText(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    if (res.status === 402) throw new Error("CrÃ©ditos insuficientes.");
+    if (res.status === 402) throw new Error("Créditos insuficientes.");
     throw new Error(err.error || "Erro ao gerar texto.");
   }
 
@@ -114,7 +114,7 @@ export async function generatePostPrompt(
   payload: GeneratePostPromptPayload
 ): Promise<GeneratePostPromptResponse> {
   const token = await getAuthToken();
-  if (!token) throw new Error("UsuÃ¡rio nÃ£o autenticado");
+  if (!token) throw new Error("Usuário não autenticado");
 
   const res = await fetch(`${getBaseUrl()}/functions/v1/generate-post-prompt`, {
     method: "POST",

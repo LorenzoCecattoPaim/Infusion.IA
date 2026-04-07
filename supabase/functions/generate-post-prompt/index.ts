@@ -47,7 +47,7 @@ serve(async (req) => {
     } = await req.json();
 
     if (!tipo_post || !descricao?.trim() || !formato || !estilo) {
-      return errorResponse("Campos obrigatÃ³rios nÃ£o preenchidos", 400);
+      return errorResponse("Campos obrigatórios não preenchidos", 400);
     }
 
     const validation = await validateWithAgent(
@@ -55,7 +55,7 @@ serve(async (req) => {
     );
     if (!validation.ok) {
       return errorResponse(
-        `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
+        `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
         400
       );
     }
@@ -76,15 +76,15 @@ serve(async (req) => {
 
     const userPrompt = `
 Tipo de post: ${tipo_post}
-DescriÃ§Ã£o: ${descricao}
+Descrição: ${descricao}
 Formato da imagem: ${formato}
 Estilo visual: ${estilo}
-Logo fornecida: ${logo_presente ? "Sim" : "NÃ£o"}
-Incluir espaÃ§o para logotipo no canto inferior direito: ${
-      incluir_espaco_logo ? "Sim" : "NÃ£o"
+Logo fornecida: ${logo_presente ? "Sim" : "Não"}
+Incluir espaço para logotipo no canto inferior direito: ${
+      incluir_espaco_logo ? "Sim" : "Não"
     }
 
-Crie um prompt objetivo e pronto para geraÃ§Ã£o de imagem. Se precisar de detalhes adicionais, faÃ§a atÃ© 3 perguntas diretas. Responda apenas com JSON vÃ¡lido.`.trim();
+Crie um prompt objetivo e pronto para geração de imagem. Se precisar de detalhes adicionais, faça até 3 perguntas diretas. Responda apenas com JSON válido.`.trim();
 
     const model = Deno.env.get("AI_MODEL_MARKETING") || "gpt-4o";
 

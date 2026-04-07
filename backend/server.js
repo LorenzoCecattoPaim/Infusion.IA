@@ -24,6 +24,7 @@ if (!SUPABASE_URL) {
 }
 
 app.get("/health", (_req, res) => {
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.json({ ok: true });
 });
 
@@ -48,6 +49,13 @@ app.all("/functions/v1/:fn", async (req, res) => {
   res.status(upstream.status);
   upstream.headers.forEach((value, key) => {
     if (key.toLowerCase() === "content-encoding") return;
+    if (key.toLowerCase() === "content-type") {
+      const lower = value.toLowerCase();
+      if ((lower.includes("application/json") || lower.includes("+json")) && !lower.includes("charset=")) {
+        res.setHeader(key, `${value}; charset=utf-8`);
+        return;
+      }
+    }
     res.setHeader(key, value);
   });
 

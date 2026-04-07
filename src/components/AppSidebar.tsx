@@ -94,7 +94,7 @@ export default function AppSidebar() {
               }`}
             >
               <Zap className="h-3.5 w-3.5 shrink-0" />
-              <span>{credits} crÃ©ditos</span>
+              <span>{credits} créditos</span>
               <span className="ml-auto text-[10px] opacity-70">Ver planos</span>
             </button>
           )}

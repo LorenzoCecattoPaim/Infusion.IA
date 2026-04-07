@@ -56,7 +56,7 @@ serve(async (req) => {
     } = await req.json();
 
     if (!tipo_conteudo || !descricao?.trim()) {
-      return errorResponse("tipo_conteudo e descricao sÃ£o obrigatÃ³rios", 400);
+      return errorResponse("tipo_conteudo e descricao são obrigatórios", 400);
     }
 
     const { data: credits } = await supabase
@@ -82,7 +82,7 @@ serve(async (req) => {
     );
     if (!validation.ok) {
       return errorResponse(
-        `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
+        `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
         400
       );
     }
@@ -96,16 +96,16 @@ serve(async (req) => {
     const limite = LIMITES[tipo_conteudo as string] || 0;
 
     const userPrompt = `
-Tipo de conteÃºdo: ${tipo_conteudo}
-Limite de caracteres (quando aplicÃ¡vel): ${limite || "N/A"}
-DescriÃ§Ã£o: ${descricao}
-PÃºblico-alvo: ${publico_alvo || "NÃ£o informado"}
-Tom de voz: ${tom_voz || "NÃ£o informado"}
-VariaÃ§Ã£o solicitada: ${variation ? "Sim" : "NÃ£o"}
+Tipo de conteúdo: ${tipo_conteudo}
+Limite de caracteres (quando aplicável): ${limite || "N/A"}
+Descrição: ${descricao}
+Público-alvo: ${publico_alvo || "Não informado"}
+Tom de voz: ${tom_voz || "Não informado"}
+Variação solicitada: ${variation ? "Sim" : "Não"}
 Refinamento solicitado: ${refine_notes || "Nenhum"}
 Texto anterior (se houver): ${previous_text || "N/A"}
 
-Gere o conteÃºdo solicitado respeitando o limite quando aplicÃ¡vel. Responda apenas com JSON vÃ¡lido.`.trim();
+Gere o conteúdo solicitado respeitando o limite quando aplicável. Responda apenas com JSON válido.`.trim();
 
     const model = Deno.env.get("AI_MODEL_MARKETING") || "gpt-4o";
 
@@ -127,7 +127,7 @@ Gere o conteÃºdo solicitado respeitando o limite quando aplicÃ¡vel. Responda
     const resultValidation = await validateWithAgent(result);
     if (!resultValidation.ok) {
       return errorResponse(
-        `ConteÃºdo gerado nÃ£o permitido: ${resultValidation.motivo_rejeicao}`,
+        `Conteúdo gerado não permitido: ${resultValidation.motivo_rejeicao}`,
         400
       );
     }

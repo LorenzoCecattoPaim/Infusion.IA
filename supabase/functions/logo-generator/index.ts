@@ -67,7 +67,9 @@ async function generateLogoWithLeonardo(prompt: string): Promise<string> {
     const gen = pollData.generations_by_pk;
 
     if (gen?.status === "COMPLETE") {
-      return gen.generated_images?.[0]?.url;
+      const url = gen.generated_images?.[0]?.url;
+      if (url) return url;
+      throw new Error("Leonardo: logo gerado sem URL.");
     }
     if (gen?.status === "FAILED") throw new Error("Leonardo: geração de logo falhou");
   }

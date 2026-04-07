@@ -14,6 +14,7 @@ import LogoGeneratorPage from "@/pages/LogoGeneratorPage";
 import PostGeneratorPage from "@/pages/PostGeneratorPage";
 import TextGeneratorPage from "@/pages/TextGeneratorPage";
 import ConfiguracoesPage from "@/pages/ConfiguracoesPage";
+import EncodingTestPage from "@/pages/EncodingTestPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -100,6 +101,14 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <ConfiguracoesPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/encoding-test"
+                element={
+                  <ProtectedRoute>
+                    <EncodingTestPage />
                   </ProtectedRoute>
                 }
               />

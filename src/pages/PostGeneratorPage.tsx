@@ -80,7 +80,7 @@ export default function PostGeneratorPage() {
 
   const handleGenerate = async (overridePrompt?: string) => {
     if (!descricao.trim()) {
-      toast.error("Descreva o post que vocÃª quer gerar.");
+      toast.error("Descreva o post que você quer gerar.");
       return;
     }
 
@@ -113,7 +113,7 @@ export default function PostGeneratorPage() {
       }
 
       if (!promptToUse) {
-        toast.error("NÃ£o foi possÃ­vel gerar o prompt do post.");
+        toast.error("Não foi possível gerar o prompt do post.");
         setLoading(false);
         return;
       }
@@ -182,7 +182,7 @@ export default function PostGeneratorPage() {
             </p>
           </div>
           <div className="text-xs text-muted-foreground">
-            {credits} crÃ©ditos disponÃ­veis
+            {credits} créditos disponíveis
           </div>
         </div>
 
@@ -259,11 +259,11 @@ export default function PostGeneratorPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">DescriÃ§Ã£o do post</label>
+                <label className="text-sm font-medium text-foreground">Descrição do post</label>
                 <Textarea
                   value={descricao}
                   onChange={(e) => setDescricao(e.target.value)}
-                  placeholder="Ex.: lanÃ§amento de produto com destaque para benefÃ­cios e chamada para compra"
+                  placeholder="Ex.: lançamento de produto com destaque para benefícios e chamada para compra"
                   className="min-h-[120px] bg-secondary border-border"
                 />
               </div>
@@ -309,7 +309,7 @@ export default function PostGeneratorPage() {
                   onCheckedChange={(val) => setIncluirEspacoLogo(Boolean(val))}
                 />
                 <label htmlFor="espaco-logo" className="text-sm text-foreground">
-                  Incluir espaÃ§o para logotipo no canto inferior direito
+                  Incluir espaço para logotipo no canto inferior direito
                 </label>
               </div>
 
@@ -340,7 +340,7 @@ export default function PostGeneratorPage() {
                     <Copy className="h-3.5 w-3.5 mr-1.5" /> Copiar
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => handleGenerate(lastPrompt)} disabled={loading}>
-                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Gerar variaÃ§Ã£o
+                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Gerar variação
                   </Button>
                 </div>
               )}
@@ -355,7 +355,7 @@ export default function PostGeneratorPage() {
                     ))}
                   </ul>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Responda ajustando a descriÃ§Ã£o e gere novamente.
+                    Responda ajustando a descrição e gere novamente.
                   </p>
                 </div>
               )}
@@ -375,7 +375,7 @@ export default function PostGeneratorPage() {
                           className="w-full object-cover"
                         />
                         <div className="p-3 bg-card flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">VariaÃ§Ã£o</span>
+                          <span className="text-xs text-muted-foreground">Variação</span>
                           <Button
                             size="icon"
                             variant="ghost"
@@ -426,12 +426,12 @@ export default function PostGeneratorPage() {
         {history.length > 0 && (
           <Card className="bg-card border-border shadow-card">
             <CardHeader className="border-b border-border">
-              <CardTitle className="font-display text-foreground">HistÃ³rico de geraÃ§Ãµes</CardTitle>
+              <CardTitle className="font-display text-foreground">Histórico de gerações</CardTitle>
             </CardHeader>
             <CardContent className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
               {history.map((item) => (
                 <div key={item.id} className="rounded-xl overflow-hidden border border-border">
-                  <img src={item.url} alt="HistÃ³rico" className="w-full object-cover" />
+                  <img src={item.url} alt="Histórico" className="w-full object-cover" />
                 </div>
               ))}
             </CardContent>

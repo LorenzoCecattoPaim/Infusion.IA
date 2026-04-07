@@ -12,9 +12,9 @@ import { useDashboardStats } from "@/hooks/useDashboardStats";
 
 const upcomingDates = [
   { date: "01/05", label: "Dia do Trabalho", days: "em breve" },
-  { date: "11/05", label: "Dia das MÃ£es", days: "em breve" },
+  { date: "11/05", label: "Dia das Mães", days: "em breve" },
   { date: "12/06", label: "Dia dos Namorados", days: "em breve" },
-  { date: "12/10", label: "Dia das CrianÃ§as", days: "em breve" },
+  { date: "12/10", label: "Dia das Crianças", days: "em breve" },
   { date: "25/12", label: "Natal", days: "em breve" },
 ];
 
@@ -42,7 +42,7 @@ export default function MarketingDashboard() {
       color: "text-primary",
     },
     {
-      label: "CrÃ©ditos disponÃ­veis",
+      label: "Créditos disponíveis",
       value: String(summary?.credits ?? 0),
       icon: Zap,
       color: "text-accent",
@@ -98,7 +98,7 @@ export default function MarketingDashboard() {
           {greeting}!
         </h1>
         <p className="text-muted-foreground mt-1">
-          Seu hub de marketing estÃ¡ pronto para impulsionar as suas vendas.
+          Seu hub de marketing está pronto para impulsionar as suas vendas.
         </p>
       </div>
 
@@ -126,7 +126,7 @@ export default function MarketingDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           <h2 className="font-display text-lg font-semibold text-foreground">
-            AÃ§Ãµes rÃ¡pidas
+            Ações rápidas
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {quickActions.map((action) => (
