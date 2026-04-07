@@ -6,15 +6,19 @@ import {
   safeParseJSON,
   renderBusinessPrompt,
 } from "../_shared/agents.ts";
-import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
+import { getBearerToken } from "../_shared/auth.ts";
+import { errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 import { log, logError } from "../_shared/monitoring.ts";
 
 const CREDIT_COST = 2;
 
 Deno.serve(async (req) => {
-  console.log("Request recebida:", req.method);
+  console.log("METHOD:", req.method);
   if (req.method === "OPTIONS") {
     return optionsResponse();
+  }
+  if (req.method !== "POST") {
+    return errorResponse("Method not allowed", 405);
   }
 
   const startTime = Date.now();
@@ -27,10 +31,8 @@ Deno.serve(async (req) => {
     );
 
     // Auth
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return errorResponse("Unauthorized", 401);
-
-    const token = authHeader.replace("Bearer ", "");
+    const token = getBearerToken(req);
+    if (!token) return errorResponse("Unauthorized", 401);
     const {
       data: { user },
       error: authError,
@@ -43,14 +45,22 @@ Deno.serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return jsonResponse({ error: "Invalid JSON" }, 400);
+      return errorResponse("Invalid JSON", 400);
     }
-    const brief = body.brief || "";
-    const channels = body.channels || (body.canal ? [body.canal] : ["Instagram"]);
-    const objetivo = body.objetivo || "NÃ£o informado";
-    const tipoConteudo = body.tipo_conteudo || body.tipoConteudo || "NÃ£o informado";
+    const brief = typeof body.brief === "string" ? body.brief : "";
+    const rawChannels = body.channels || (body.canal ? [body.canal] : ["Instagram"]);
+    const channels = Array.isArray(rawChannels)
+      ? rawChannels.map((c) => String(c)).filter((c) => c.trim())
+      : [String(rawChannels)];
+    const objetivo = typeof body.objetivo === "string" ? body.objetivo : "Não informado";
+    const tipoConteudo =
+      typeof body.tipo_conteudo === "string"
+        ? body.tipo_conteudo
+        : typeof body.tipoConteudo === "string"
+        ? body.tipoConteudo
+        : "Não informado";
 
-    if (!channels?.length) return errorResponse("canal Ã© obrigatÃ³rio", 400);
+    if (!channels?.length) return errorResponse("canal é obrigatório", 400);
 
     // Check credits
     const { data: credits } = await supabase
@@ -78,7 +88,7 @@ Deno.serve(async (req) => {
     );
     if (!validation.ok) {
       return errorResponse(
-        `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
+        `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
         400
       );
     }
@@ -92,10 +102,10 @@ Deno.serve(async (req) => {
     const userPrompt = `
 Canal: ${channels.join(", ")}
 Objetivo: ${objetivo}
-Tipo de conteÃºdo: ${tipoConteudo}
-Brief: ${brief || "NÃ£o informado"}
+Tipo de conteúdo: ${tipoConteudo}
+Brief: ${brief || "Não informado"}
 
-Gere um post para cada canal solicitado. Responda apenas com JSON vÃ¡lido.`.trim();
+Gere um post para cada canal solicitado. Responda apenas com JSON válido.`.trim();
 
     const model = Deno.env.get("AI_MODEL_MARKETING") || "gpt-4o";
 
@@ -121,7 +131,7 @@ Gere um post para cada canal solicitado. Responda apenas com JSON vÃ¡lido.`.tr
     const resultValidation = await validateWithAgent(result);
     if (!resultValidation.ok) {
       return errorResponse(
-        `ConteÃºdo gerado nÃ£o permitido: ${resultValidation.motivo_rejeicao}`,
+        `Conteúdo gerado não permitido: ${resultValidation.motivo_rejeicao}`,
         400
       );
     }
@@ -163,10 +173,9 @@ Gere um post para cada canal solicitado. Responda apenas com JSON vÃ¡lido.`.tr
     return jsonResponse(parsed);
   } catch (err) {
     logError("generate-posts", userId, err);
-    return errorResponse(
-      err instanceof Error ? err.message : "Erro ao gerar posts",
-      500
-    );
+    return errorResponse("Erro ao gerar posts", 500);
+  } finally {
+    console.log("DURATION_MS:", Date.now() - startTime);
   }
 });
 

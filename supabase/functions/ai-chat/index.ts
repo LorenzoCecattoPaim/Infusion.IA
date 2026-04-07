@@ -5,13 +5,17 @@ import {
   validateWithAgent,
   renderBusinessPrompt,
 } from "../_shared/agents.ts";
+import { getBearerToken } from "../_shared/auth.ts";
 import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 import { log, logError } from "../_shared/monitoring.ts";
 
 Deno.serve(async (req) => {
-  console.log("Request recebida:", req.method);
+  console.log("METHOD:", req.method);
   if (req.method === "OPTIONS") {
     return optionsResponse();
+  }
+  if (req.method !== "POST") {
+    return errorResponse("Method not allowed", 405);
   }
 
   const startTime = Date.now();
@@ -24,10 +28,8 @@ Deno.serve(async (req) => {
     );
 
     // Auth
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return errorResponse("Unauthorized", 401);
-
-    const token = authHeader.replace("Bearer ", "");
+    const token = getBearerToken(req);
+    if (!token) return errorResponse("Unauthorized", 401);
     const {
       data: { user },
       error: authError,
@@ -51,7 +53,7 @@ Deno.serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return jsonResponse({ error: "Invalid JSON" }, 400);
+      return errorResponse("Invalid JSON", 400);
     }
     const { messages = [], stream = false, lastMessageOverride } = body;
 
@@ -104,7 +106,7 @@ Deno.serve(async (req) => {
       const validation = await validateWithAgent(lastUserMsg.content);
       if (!validation.ok) {
         return errorResponse(
-          `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
+          `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
           400
         );
       }
@@ -129,6 +131,10 @@ Deno.serve(async (req) => {
         model,
         stream: true,
       })) as Response;
+
+      if (!aiResponse || !aiResponse.body) {
+        return errorResponse("Stream failed", 500);
+      }
 
       log({
         function: "ai-chat",
@@ -169,10 +175,9 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     logError("ai-chat", userId, err);
-    return errorResponse(
-      err instanceof Error ? err.message : "Erro interno",
-      500
-    );
+    return errorResponse("Erro interno", 500);
+  } finally {
+    console.log("DURATION_MS:", Date.now() - startTime);
   }
 });
 

@@ -3,10 +3,15 @@ import { corsHeaders, errorResponse, optionsResponse } from "../_shared/cors.ts"
 
 // Dev-only endpoint to manually add credits for testing
 Deno.serve(async (req) => {
-  console.log("Request recebida:", req.method);
+  console.log("METHOD:", req.method);
   if (req.method === "OPTIONS") {
     return optionsResponse();
   }
+  if (req.method !== "GET" && req.method !== "POST") {
+    return errorResponse("Method not allowed", 405);
+  }
+
+  const startTime = Date.now();
 
   try {
     const supabase = createClient(
@@ -20,13 +25,13 @@ Deno.serve(async (req) => {
     const userId = url.searchParams.get("user_id");
 
     if (!orderId || !credits || !userId) {
-      return errorResponse("ParÃ¢metros invÃ¡lidos", 400);
+      return errorResponse("Parâmetros inválidos", 400);
     }
 
     // Only allow in dev
     const isDev = Deno.env.get("ENVIRONMENT") !== "production";
     if (!isDev) {
-      return errorResponse("Endpoint disponÃ­vel apenas em desenvolvimento", 403);
+      return errorResponse("Endpoint disponível apenas em desenvolvimento", 403);
     }
 
     const { data: order } = await supabase
@@ -37,7 +42,7 @@ Deno.serve(async (req) => {
 
     if (order?.status === "paid") {
       return new Response(
-        `<html><body><h1>CrÃ©ditos jÃ¡ adicionados!</h1><a href="/">Voltar</a></body></html>`,
+        `<html><body><h1>Créditos já adicionados!</h1><a href="/">Voltar</a></body></html>`,
         { headers: { ...corsHeaders, "Content-Type": "text/html; charset=UTF-8" } }
       );
     }
@@ -64,11 +69,14 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      `<html><body><h1>âœ… ${credits} crÃ©ditos adicionados (DEV MODE)!</h1><a href="/">Voltar ao app</a></body></html>`,
+      `<html><body><h1>OK ${credits} créditos adicionados (DEV MODE)!</h1><a href="/">Voltar ao app</a></body></html>`,
       { headers: { ...corsHeaders, "Content-Type": "text/html; charset=UTF-8" } }
     );
   } catch (err) {
-    return errorResponse(String(err), 500);
+    console.error("recharge-credits error:", err);
+    return errorResponse("Erro interno", 500);
+  } finally {
+    console.log("DURATION_MS:", Date.now() - startTime);
   }
 });
 

@@ -5,7 +5,7 @@ export const corsHeaders = {
   ...supabaseCorsHeaders,
   "Access-Control-Allow-Origin": "https://infusion-ia.vercel.app",
   "Access-Control-Allow-Headers": "authorization, content-type, apikey",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 export function optionsResponse(): Response {

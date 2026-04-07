@@ -7,7 +7,8 @@ import {
   safeParseJSON,
   renderBusinessPrompt,
 } from "../_shared/agents.ts";
-import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
+import { getBearerToken } from "../_shared/auth.ts";
+import { errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 import { log, logError } from "../_shared/monitoring.ts";
 
 const CREDIT_COST_PER_MESSAGE = 2;
@@ -15,7 +16,7 @@ const CREDIT_COST_PER_IMAGE = 5;
 
 async function generateLogoWithLeonardo(prompt: string): Promise<string> {
   const apiKey = Deno.env.get("LEONARDO_API_KEY") || "";
-  if (!apiKey) throw new Error("LEONARDO_API_KEY nÃ£o configurado.");
+  if (!apiKey) throw new Error("LEONARDO_API_KEY não configurado.");
 
   const logoPrompt = `${prompt}, professional logo design, vector art style, clean lines, scalable, minimal background, high quality, crisp edges`;
   const negativePrompt =
@@ -49,7 +50,7 @@ async function generateLogoWithLeonardo(prompt: string): Promise<string> {
 
   const initData = await initRes.json();
   const generationId = initData.sdGenerationJob?.generationId;
-  if (!generationId) throw new Error("Leonardo: falha ao iniciar geraÃ§Ã£o de logo");
+  if (!generationId) throw new Error("Leonardo: falha ao iniciar geração de logo");
 
   for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 2000));
@@ -69,10 +70,10 @@ async function generateLogoWithLeonardo(prompt: string): Promise<string> {
       if (url) return url;
       throw new Error("Leonardo: logo gerado sem URL.");
     }
-    if (gen?.status === "FAILED") throw new Error("Leonardo: geraÃ§Ã£o de logo falhou");
+    if (gen?.status === "FAILED") throw new Error("Leonardo: geração de logo falhou");
   }
 
-  throw new Error("Leonardo: timeout na geraÃ§Ã£o de logo");
+  throw new Error("Leonardo: timeout na geração de logo");
 }
 
 async function buildLogoPrompts(conversation: string): Promise<{ prompts: string[]; descriptions: string[] }> {
@@ -89,9 +90,12 @@ async function buildLogoPrompts(conversation: string): Promise<{ prompts: string
 }
 
 Deno.serve(async (req) => {
-  console.log("Request recebida:", req.method);
+  console.log("METHOD:", req.method);
   if (req.method === "OPTIONS") {
     return optionsResponse();
+  }
+  if (req.method !== "POST") {
+    return errorResponse("Method not allowed", 405);
   }
 
   const startTime = Date.now();
@@ -104,10 +108,8 @@ Deno.serve(async (req) => {
     );
 
     // Auth
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return errorResponse("Unauthorized", 401);
-
-    const token = authHeader.replace("Bearer ", "");
+    const token = getBearerToken(req);
+    if (!token) return errorResponse("Unauthorized", 401);
     const {
       data: { user },
       error: authError,
@@ -120,7 +122,7 @@ Deno.serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return jsonResponse({ error: "Invalid JSON" }, 400);
+      return errorResponse("Invalid JSON", 400);
     }
     const { messages, action, selectedPrompt } = body as {
       messages?: Array<{ role: string; content: string }>;
@@ -128,7 +130,13 @@ Deno.serve(async (req) => {
       selectedPrompt?: string;
     };
     if (!Array.isArray(messages) || messages.length === 0) {
-      return errorResponse("messages Ã© obrigatÃ³rio", 400);
+      return errorResponse("messages é obrigatório", 400);
+    }
+    const normalizedMessages = messages
+      .map((m) => ({ role: String(m.role || ""), content: String(m.content || "") }))
+      .filter((m) => m.role && m.content);
+    if (!normalizedMessages.length) {
+      return errorResponse("messages é obrigatório", 400);
     }
 
     // Check credits
@@ -157,7 +165,7 @@ Deno.serve(async (req) => {
         return errorResponse("insufficient_credits", 402);
       }
 
-      const conversationText = messages
+      const conversationText = normalizedMessages
         .map((m: { role: string; content: string }) => `${m.role.toUpperCase()}: ${m.content}`)
         .join("\n");
 
@@ -166,7 +174,7 @@ Deno.serve(async (req) => {
       const descriptions = promptSet.descriptions?.length ? promptSet.descriptions.slice(0, 3) : [];
 
       if (prompts.length < 3) {
-        return errorResponse("NÃ£o foi possÃ­vel gerar os prompts do logo.", 500);
+        return errorResponse("Não foi possível gerar os prompts do logo.", 500);
       }
 
       const logoUrls = await Promise.all(prompts.map((p) => generateLogoWithLeonardo(p)));
@@ -204,14 +212,14 @@ Deno.serve(async (req) => {
       });
 
       return jsonResponse({
-        message: "Aqui estÃ£o suas trÃªs sugestÃµes de logo! Qual delas vocÃª mais gostou?",
+        message: "Aqui estão suas três sugestões de logo! Qual delas você mais gostou?",
         logos,
       });
     }
 
     if (action === "generate_variations") {
       if (!selectedPrompt) {
-        return errorResponse("selectedPrompt Ã© obrigatÃ³rio", 400);
+        return errorResponse("selectedPrompt é obrigatório", 400);
       }
 
       const variations = [
@@ -263,11 +271,19 @@ Deno.serve(async (req) => {
         duration_ms: Date.now() - startTime,
       });
 
-      return jsonResponse({ message: "Aqui estÃ£o as variaÃ§Ãµes do seu logo!", logos });
+      return jsonResponse({ message: "Aqui estão as variações do seu logo!", logos });
+    }
+
+    if (action && action !== "chat") {
+      return errorResponse("Ação inválida", 400);
+    }
+
+    if (credits.credits < CREDIT_COST_PER_MESSAGE) {
+      return errorResponse("insufficient_credits", 402);
     }
 
     // Validate last user message
-    const lastMsg = messages
+    const lastMsg = normalizedMessages
       .filter((m: { role: string }) => m.role === "user")
       .pop();
 
@@ -275,7 +291,7 @@ Deno.serve(async (req) => {
       const validation = await validateWithAgent(lastMsg.content);
       if (!validation.ok) {
         return errorResponse(
-          `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
+          `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
           400
         );
       }
@@ -290,7 +306,7 @@ Deno.serve(async (req) => {
     const model = Deno.env.get("AI_MODEL_LOGO") || "gpt-4o";
     const agentText = (await callAgent({
       systemPrompt,
-      messages: messages.map((m: { role: string; content: string }) => ({
+      messages: normalizedMessages.map((m: { role: string; content: string }) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
       })),
@@ -319,10 +335,9 @@ Deno.serve(async (req) => {
     return jsonResponse({ message: agentText, logos: [] });
   } catch (err) {
     logError("logo-generator", userId, err);
-    return errorResponse(
-      err instanceof Error ? err.message : "Erro ao processar logo",
-      500
-    );
+    return errorResponse("Erro ao processar logo", 500);
+  } finally {
+    console.log("DURATION_MS:", Date.now() - startTime);
   }
 });
 

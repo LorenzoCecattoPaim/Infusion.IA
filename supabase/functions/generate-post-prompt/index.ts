@@ -6,13 +6,17 @@ import {
   safeParseJSON,
   renderBusinessPrompt,
 } from "../_shared/agents.ts";
-import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
+import { getBearerToken } from "../_shared/auth.ts";
+import { errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 import { log, logError } from "../_shared/monitoring.ts";
 
 Deno.serve(async (req) => {
-  console.log("Request recebida:", req.method);
+  console.log("METHOD:", req.method);
   if (req.method === "OPTIONS") {
     return optionsResponse();
+  }
+  if (req.method !== "POST") {
+    return errorResponse("Method not allowed", 405);
   }
 
   const startTime = Date.now();
@@ -24,10 +28,8 @@ Deno.serve(async (req) => {
       Deno.env.get("SERVICE_ROLE_KEY")!
     );
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return errorResponse("Unauthorized", 401);
-
-    const token = authHeader.replace("Bearer ", "");
+    const token = getBearerToken(req);
+    if (!token) return errorResponse("Unauthorized", 401);
     const {
       data: { user },
       error: authError,
@@ -40,7 +42,7 @@ Deno.serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return jsonResponse({ error: "Invalid JSON" }, 400);
+      return errorResponse("Invalid JSON", 400);
     }
     const {
       tipo_post,
@@ -59,7 +61,7 @@ Deno.serve(async (req) => {
     };
 
     if (!tipo_post || !descricao?.trim() || !formato || !estilo) {
-      return errorResponse("Campos obrigatÃ³rios nÃ£o preenchidos", 400);
+      return errorResponse("Campos obrigatórios não preenchidos", 400);
     }
 
     const validation = await validateWithAgent(
@@ -67,7 +69,7 @@ Deno.serve(async (req) => {
     );
     if (!validation.ok) {
       return errorResponse(
-        `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
+        `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
         400
       );
     }
@@ -88,15 +90,15 @@ Deno.serve(async (req) => {
 
     const userPrompt = `
 Tipo de post: ${tipo_post}
-DescriÃ§Ã£o: ${descricao}
+Descrição: ${descricao}
 Formato da imagem: ${formato}
 Estilo visual: ${estilo}
-Logo fornecida: ${logo_presente ? "Sim" : "NÃ£o"}
-Incluir espaÃ§o para logotipo no canto inferior direito: ${
-      incluir_espaco_logo ? "Sim" : "NÃ£o"
+Logo fornecida: ${logo_presente ? "Sim" : "Não"}
+Incluir espaço para logotipo no canto inferior direito: ${
+      incluir_espaco_logo ? "Sim" : "Não"
     }
 
-Crie um prompt objetivo e pronto para geraÃ§Ã£o de imagem. Se precisar de detalhes adicionais, faÃ§a atÃ© 3 perguntas diretas. Responda apenas com JSON vÃ¡lido.`.trim();
+Crie um prompt objetivo e pronto para geração de imagem. Se precisar de detalhes adicionais, faça até 3 perguntas diretas. Responda apenas com JSON válido.`.trim();
 
     const model = Deno.env.get("AI_MODEL_MARKETING") || "gpt-4o";
 
@@ -130,10 +132,9 @@ Crie um prompt objetivo e pronto para geraÃ§Ã£o de imagem. Se precisar de de
     return jsonResponse(parsed);
   } catch (err) {
     logError("generate-post-prompt", userId, err);
-    return errorResponse(
-      err instanceof Error ? err.message : "Erro ao gerar prompt",
-      500
-    );
+    return errorResponse("Erro ao gerar prompt", 500);
+  } finally {
+    console.log("DURATION_MS:", Date.now() - startTime);
   }
 });
 

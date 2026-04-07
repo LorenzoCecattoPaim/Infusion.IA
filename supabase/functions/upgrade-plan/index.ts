@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
+import { getBearerToken } from "../_shared/auth.ts";
+import { errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 
 const PLANS: Record<string, { label: string; credits_monthly: number; amount_cents: number }> = {
   free: { label: "Gratuito", credits_monthly: 30, amount_cents: 0 },
@@ -9,10 +10,15 @@ const PLANS: Record<string, { label: string; credits_monthly: number; amount_cen
 };
 
 Deno.serve(async (req) => {
-  console.log("Request recebida:", req.method);
+  console.log("METHOD:", req.method);
   if (req.method === "OPTIONS") {
     return optionsResponse();
   }
+  if (req.method !== "POST") {
+    return errorResponse("Method not allowed", 405);
+  }
+
+  const startTime = Date.now();
 
   try {
     const supabase = createClient(
@@ -20,10 +26,8 @@ Deno.serve(async (req) => {
       Deno.env.get("SERVICE_ROLE_KEY")!
     );
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return errorResponse("Unauthorized", 401);
-
-    const token = authHeader.replace("Bearer ", "");
+    const token = getBearerToken(req);
+    if (!token) return errorResponse("Unauthorized", 401);
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) return errorResponse("Unauthorized", 401);
 
@@ -31,11 +35,11 @@ Deno.serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return jsonResponse({ error: "Invalid JSON" }, 400);
+      return errorResponse("Invalid JSON", 400);
     }
     const { plan } = body as { plan?: string };
     const planConfig = PLANS[plan];
-    if (!planConfig) return errorResponse("Plano invÃ¡lido", 400);
+    if (!planConfig) return errorResponse("Plano inválido", 400);
 
     if (planConfig.amount_cents === 0) {
       // Downgrade to free
@@ -96,7 +100,9 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: true, plan, subscription_id: pagarmeData.id });
   } catch (err) {
     console.error("upgrade-plan error:", err);
-    return errorResponse(String(err), 500);
+    return errorResponse("Erro interno", 500);
+  } finally {
+    console.log("DURATION_MS:", Date.now() - startTime);
   }
 });
 

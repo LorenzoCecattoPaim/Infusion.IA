@@ -1,17 +1,23 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
+import { getBearerToken } from "../_shared/auth.ts";
+import { errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 
 const PLANS: Record<string, { credits: number; amount_cents: number; label: string }> = {
-  starter: { credits: 100, amount_cents: 1990, label: "Starter â€” 100 crÃ©ditos" },
-  pro: { credits: 300, amount_cents: 4990, label: "Pro â€” 300 crÃ©ditos" },
-  business: { credits: 1000, amount_cents: 12990, label: "Business â€” 1.000 crÃ©ditos" },
+  starter: { credits: 100, amount_cents: 1990, label: "Starter - 100 créditos" },
+  pro: { credits: 300, amount_cents: 4990, label: "Pro - 300 créditos" },
+  business: { credits: 1000, amount_cents: 12990, label: "Business - 1.000 créditos" },
 };
 
 Deno.serve(async (req) => {
-  console.log("Request recebida:", req.method);
+  console.log("METHOD:", req.method);
   if (req.method === "OPTIONS") {
     return optionsResponse();
   }
+  if (req.method !== "POST") {
+    return errorResponse("Method not allowed", 405);
+  }
+
+  const startTime = Date.now();
 
   try {
     const supabase = createClient(
@@ -20,10 +26,8 @@ Deno.serve(async (req) => {
     );
 
     // Auth
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return errorResponse("Unauthorized", 401);
-
-    const token = authHeader.replace("Bearer ", "");
+    const token = getBearerToken(req);
+    if (!token) return errorResponse("Unauthorized", 401);
     const {
       data: { user },
       error: authError,
@@ -34,11 +38,11 @@ Deno.serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return jsonResponse({ error: "Invalid JSON" }, 400);
+      return errorResponse("Invalid JSON", 400);
     }
     const { plan } = body as { plan?: string };
     const planConfig = PLANS[plan];
-    if (!planConfig) return errorResponse("Plano invÃ¡lido", 400);
+    if (!planConfig) return errorResponse("Plano inválido", 400);
 
     const pagarmeKey = Deno.env.get("PAGARME_API_KEY") || "";
 
@@ -58,7 +62,7 @@ Deno.serve(async (req) => {
     if (!order) return errorResponse("Erro ao criar pedido", 500);
 
     if (!pagarmeKey) {
-      // Dev mode â€” simulate payment URL
+      // Dev mode - simulate payment URL
       return jsonResponse({
         payment_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/recharge-credits?order_id=${order.id}&credits=${planConfig.credits}&user_id=${user.id}`,
         order_id: order.id,
@@ -129,10 +133,9 @@ Deno.serve(async (req) => {
     return jsonResponse({ payment_url: paymentUrl, order_id: order.id });
   } catch (err) {
     console.error("buy-credits error:", err);
-    return errorResponse(
-      err instanceof Error ? err.message : "Erro interno",
-      500
-    );
+    return errorResponse("Erro interno", 500);
+  } finally {
+    console.log("DURATION_MS:", Date.now() - startTime);
   }
 });
 

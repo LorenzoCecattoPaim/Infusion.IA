@@ -6,7 +6,8 @@ import {
   safeParseJSON,
   renderBusinessPrompt,
 } from "../_shared/agents.ts";
-import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
+import { getBearerToken } from "../_shared/auth.ts";
+import { errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 import { log, logError } from "../_shared/monitoring.ts";
 
 const CREDIT_COST = 1;
@@ -18,9 +19,12 @@ const LIMITES: Record<string, number> = {
 };
 
 Deno.serve(async (req) => {
-  console.log("Request recebida:", req.method);
+  console.log("METHOD:", req.method);
   if (req.method === "OPTIONS") {
     return optionsResponse();
+  }
+  if (req.method !== "POST") {
+    return errorResponse("Method not allowed", 405);
   }
 
   const startTime = Date.now();
@@ -32,10 +36,8 @@ Deno.serve(async (req) => {
       Deno.env.get("SERVICE_ROLE_KEY")!
     );
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return errorResponse("Unauthorized", 401);
-
-    const token = authHeader.replace("Bearer ", "");
+    const token = getBearerToken(req);
+    if (!token) return errorResponse("Unauthorized", 401);
     const {
       data: { user },
       error: authError,
@@ -48,7 +50,7 @@ Deno.serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return jsonResponse({ error: "Invalid JSON" }, 400);
+      return errorResponse("Invalid JSON", 400);
     }
     const {
       tipo_conteudo,
@@ -69,7 +71,7 @@ Deno.serve(async (req) => {
     };
 
     if (!tipo_conteudo || !descricao?.trim()) {
-      return errorResponse("tipo_conteudo e descricao sÃ£o obrigatÃ³rios", 400);
+      return errorResponse("tipo_conteudo e descricao são obrigatórios", 400);
     }
 
     const { data: credits } = await supabase
@@ -95,7 +97,7 @@ Deno.serve(async (req) => {
     );
     if (!validation.ok) {
       return errorResponse(
-        `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
+        `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
         400
       );
     }
@@ -109,16 +111,16 @@ Deno.serve(async (req) => {
     const limite = LIMITES[tipo_conteudo as string] || 0;
 
     const userPrompt = `
-Tipo de conteÃºdo: ${tipo_conteudo}
-Limite de caracteres (quando aplicÃ¡vel): ${limite || "N/A"}
-DescriÃ§Ã£o: ${descricao}
-PÃºblico-alvo: ${publico_alvo || "NÃ£o informado"}
-Tom de voz: ${tom_voz || "NÃ£o informado"}
-VariaÃ§Ã£o solicitada: ${variation ? "Sim" : "NÃ£o"}
+Tipo de conteúdo: ${tipo_conteudo}
+Limite de caracteres (quando aplicável): ${limite || "N/A"}
+Descrição: ${descricao}
+Público-alvo: ${publico_alvo || "Não informado"}
+Tom de voz: ${tom_voz || "Não informado"}
+Variação solicitada: ${variation ? "Sim" : "Não"}
 Refinamento solicitado: ${refine_notes || "Nenhum"}
 Texto anterior (se houver): ${previous_text || "N/A"}
 
-Gere o conteÃºdo solicitado respeitando o limite quando aplicÃ¡vel. Responda apenas com JSON vÃ¡lido.`.trim();
+Gere o conteúdo solicitado respeitando o limite quando aplicável. Responda apenas com JSON válido.`.trim();
 
     const model = Deno.env.get("AI_MODEL_MARKETING") || "gpt-4o";
 
@@ -148,7 +150,7 @@ Gere o conteÃºdo solicitado respeitando o limite quando aplicÃ¡vel. Responda
     const resultValidation = await validateWithAgent(result);
     if (!resultValidation.ok) {
       return errorResponse(
-        `ConteÃºdo gerado nÃ£o permitido: ${resultValidation.motivo_rejeicao}`,
+        `Conteúdo gerado não permitido: ${resultValidation.motivo_rejeicao}`,
         400
       );
     }
@@ -173,10 +175,9 @@ Gere o conteÃºdo solicitado respeitando o limite quando aplicÃ¡vel. Responda
     return jsonResponse(parsed);
   } catch (err) {
     logError("generate-text", userId, err);
-    return errorResponse(
-      err instanceof Error ? err.message : "Erro ao gerar texto",
-      500
-    );
+    return errorResponse("Erro ao gerar texto", 500);
+  } finally {
+    console.log("DURATION_MS:", Date.now() - startTime);
   }
 });
 

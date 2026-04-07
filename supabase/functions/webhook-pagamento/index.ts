@@ -1,11 +1,16 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
+import { corsHeaders, errorResponse, optionsResponse } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
-  console.log("Request recebida:", req.method);
+  console.log("METHOD:", req.method);
   if (req.method === "OPTIONS") {
     return optionsResponse();
   }
+  if (req.method !== "POST") {
+    return errorResponse("Method not allowed", 405);
+  }
+
+  const startTime = Date.now();
 
   try {
     const supabase = createClient(
@@ -17,7 +22,7 @@ Deno.serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return jsonResponse({ error: "Invalid JSON" }, 400);
+      return errorResponse("Invalid JSON", 400);
     }
     console.log("Webhook recebido:", JSON.stringify(body));
 
@@ -34,7 +39,10 @@ Deno.serve(async (req) => {
 
       if (!order_id || !user_id || !credits) {
         console.error("Webhook: metadata incompleto", metadata);
-        return new Response("OK", { status: 200, headers: corsHeaders });
+        return new Response("OK", {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "text/plain; charset=UTF-8" },
+        });
       }
 
       // Check if already processed
@@ -45,7 +53,10 @@ Deno.serve(async (req) => {
         .single();
 
       if (order?.status === "paid") {
-        return new Response("OK", { status: 200, headers: corsHeaders });
+        return new Response("OK", {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "text/plain; charset=UTF-8" },
+        });
       }
 
       // Update order status
@@ -72,20 +83,22 @@ Deno.serve(async (req) => {
       }
 
       console.log(
-        `CrÃ©ditos adicionados: user=${user_id}, credits=${credits}, order=${order_id}`
+        `Créditos adicionados: user=${user_id}, credits=${credits}, order=${order_id}`
       );
     }
 
     return new Response("OK", {
       status: 200,
-      headers: corsHeaders,
+      headers: { ...corsHeaders, "Content-Type": "text/plain; charset=UTF-8" },
     });
   } catch (err) {
     console.error("webhook-pagamento error:", err);
     return errorResponse(
-      err instanceof Error ? err.message : "Erro interno",
+      "Erro interno",
       500
     );
+  } finally {
+    console.log("DURATION_MS:", Date.now() - startTime);
   }
 });
 

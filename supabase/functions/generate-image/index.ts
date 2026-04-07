@@ -5,7 +5,8 @@ import {
   validateWithAgent,
   safeParseJSON,
 } from "../_shared/agents.ts";
-import { corsHeaders, errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
+import { getBearerToken } from "../_shared/auth.ts";
+import { errorResponse, jsonResponse, optionsResponse } from "../_shared/cors.ts";
 import { log, logError } from "../_shared/monitoring.ts";
 
 const LEONARDO_API_KEY = () => Deno.env.get("LEONARDO_API_KEY") || "";
@@ -24,7 +25,7 @@ async function generateWithLeonardo(
   height: number
 ): Promise<string> {
   const apiKey = LEONARDO_API_KEY();
-  if (!apiKey) throw new Error("LEONARDO_API_KEY nÃ£o configurado.");
+  if (!apiKey) throw new Error("LEONARDO_API_KEY não configurado.");
 
   const body = {
     prompt,
@@ -57,7 +58,7 @@ async function generateWithLeonardo(
 
   const initData = await initRes.json();
   const generationId = initData.sdGenerationJob?.generationId;
-  if (!generationId) throw new Error("Leonardo: falha ao iniciar geraÃ§Ã£o");
+  if (!generationId) throw new Error("Leonardo: falha ao iniciar geração");
 
   // Poll for completion
   for (let i = 0; i < 30; i++) {
@@ -77,22 +78,25 @@ async function generateWithLeonardo(
 
     if (gen?.status === "COMPLETE") {
       const url = gen.generated_images?.[0]?.url;
-      if (!url) throw new Error("Leonardo: URL da imagem nÃ£o encontrada");
+      if (!url) throw new Error("Leonardo: URL da imagem não encontrada");
       return url;
     }
 
     if (gen?.status === "FAILED") {
-      throw new Error("Leonardo: geraÃ§Ã£o falhou");
+      throw new Error("Leonardo: geração falhou");
     }
   }
 
-  throw new Error("Leonardo: timeout na geraÃ§Ã£o (60s)");
+  throw new Error("Leonardo: timeout na geração (60s)");
 }
 
 Deno.serve(async (req) => {
-  console.log("Request recebida:", req.method);
+  console.log("METHOD:", req.method);
   if (req.method === "OPTIONS") {
     return optionsResponse();
+  }
+  if (req.method !== "POST") {
+    return errorResponse("Method not allowed", 405);
   }
 
   const startTime = Date.now();
@@ -105,10 +109,8 @@ Deno.serve(async (req) => {
     );
 
     // Auth
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return errorResponse("Unauthorized", 401);
-
-    const token = authHeader.replace("Bearer ", "");
+    const token = getBearerToken(req);
+    if (!token) return errorResponse("Unauthorized", 401);
     const {
       data: { user },
       error: authError,
@@ -121,7 +123,7 @@ Deno.serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return jsonResponse({ error: "Invalid JSON" }, 400);
+      return errorResponse("Invalid JSON", 400);
     }
     const { prompt, quality = "standard", template, format } = body as {
       prompt?: string;
@@ -130,7 +132,7 @@ Deno.serve(async (req) => {
       format?: string;
     };
 
-    if (!prompt?.trim()) return errorResponse("prompt Ã© obrigatÃ³rio", 400);
+    if (!prompt?.trim()) return errorResponse("prompt é obrigatório", 400);
 
     const creditCost = quality === "premium" ? 10 : 5;
 
@@ -158,15 +160,15 @@ Deno.serve(async (req) => {
     const validation = await validateWithAgent(prompt);
     if (!validation.ok) {
       return errorResponse(
-        `ConteÃºdo nÃ£o permitido: ${validation.motivo_rejeicao}`,
+        `Conteúdo não permitido: ${validation.motivo_rejeicao}`,
         400
       );
     }
 
     // Optimize prompt with Agent 4
     const userContent = template
-      ? `Otimize este prompt para geraÃ§Ã£o de imagem. Template: ${template}. DescriÃ§Ã£o: ${prompt}`
-      : `Otimize este prompt para geraÃ§Ã£o de imagem: ${prompt}`;
+      ? `Otimize este prompt para geração de imagem. Template: ${template}. Descrição: ${prompt}`
+      : `Otimize este prompt para geração de imagem: ${prompt}`;
 
     let optimized: {
       prompt_1: string;
@@ -263,10 +265,9 @@ Deno.serve(async (req) => {
     return jsonResponse({ images: savedImages, style_notes: optimized.style_notes });
   } catch (err) {
     logError("generate-image", userId, err);
-    return errorResponse(
-      err instanceof Error ? err.message : "Erro ao gerar imagem",
-      500
-    );
+    return errorResponse("Erro ao gerar imagem", 500);
+  } finally {
+    console.log("DURATION_MS:", Date.now() - startTime);
   }
 });
 
