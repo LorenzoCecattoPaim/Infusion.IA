@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/dialog";
 import DashboardLayout from "@/components/DashboardLayout";
 import ChatMessage from "@/components/ChatMessage";
-import { supabase } from "@/integrations/supabase/client";
 import { fetchFunctions } from "@/lib/apiBase";
 import { useCredits } from "@/hooks/useCredits";
 import { useQueryClient } from "@tanstack/react-query";
@@ -68,16 +67,10 @@ export default function LogoGeneratorPage() {
   }, [messages, logos]);
 
   const callLogoApi = async (payload: Record<string, unknown>) => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const token = session?.access_token;
-
-    const res = await fetchFunctions("/functions/v1/logo-generator", {
+    const res = await fetchFunctions("/logo-generator", {
       method: "POST",
       headers: {
         "Content-Type": "application/json; charset=UTF-8",
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(payload),
     });

@@ -1,4 +1,4 @@
-services:
+﻿services:
   - type: web
     name: infusion-ia-backend
     env: node
@@ -7,7 +7,23 @@ services:
     buildCommand: npm install
     startCommand: npm start
     envVars:
-      - key: SUPABASE_URL
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SSL
+        sync: false
+      - key: JWT_SECRET
         sync: false
       - key: CORS_ORIGIN
+        sync: false
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_MODEL_MARKETING
+        sync: false
+      - key: AI_MODEL_LOGO
+        sync: false
+      - key: AI_MODEL_PROMPT_OPT
+        sync: false
+      - key: AI_MODEL_VALIDATOR
+        sync: false
+      - key: LEONARDO_API_KEY
         sync: false

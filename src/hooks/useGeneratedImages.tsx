@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { fetchFunctions } from "@/lib/apiBase";
 
 export interface GeneratedImage {
   id: string;
@@ -19,14 +19,10 @@ export function useGeneratedImages() {
     queryKey: ["generated_images", user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const { data, error } = await supabase
-        .from("generated_images")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return data as GeneratedImage[];
+      const res = await fetchFunctions("/generated-images");
+      if (!res.ok) throw new Error("Erro ao carregar imagens.");
+      const data = await res.json();
+      return (data.images || []) as GeneratedImage[];
     },
     enabled: !!user,
   });

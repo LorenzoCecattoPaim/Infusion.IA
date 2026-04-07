@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { fetchFunctions } from "@/lib/apiBase";
 
 export function useCredits() {
   const { user } = useAuth();
@@ -9,13 +9,10 @@ export function useCredits() {
     queryKey: ["credits", user?.id],
     queryFn: async () => {
       if (!user) return { credits: 0, plan: "free" };
-      const { data, error } = await supabase
-        .from("user_credits")
-        .select("credits, plan")
-        .eq("user_id", user.id)
-        .single();
-      if (error) throw error;
-      return data;
+      const res = await fetchFunctions("/credits");
+      if (!res.ok) throw new Error("Erro ao carregar créditos.");
+      const data = await res.json();
+      return { credits: data.credits ?? 0, plan: data.plan ?? "free" };
     },
     enabled: !!user,
     staleTime: 1000 * 30,

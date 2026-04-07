@@ -1,21 +1,21 @@
-# Infusion.IA
+﻿# Infusion.IA
 
 Hub de marketing com Inteligência Artificial para pequenas e médias empresas brasileiras.
 
 ## Stack
 
 - **Frontend:** Vite + React 18 + TypeScript + Tailwind CSS + shadcn/ui
-- **Backend:** Supabase (Auth, DB, Storage, Edge Functions em Deno)
+- **Backend:** Node.js + Express (Render)
+- **Banco:** PostgreSQL direto
 - **IA:** OpenAI API (GPT-4o) — 5 agentes especializados
 - **Imagens:** Leonardo AI
-- **Pagamentos:** Pagar.me + InfinitePay
 
 ## Setup Local
 
 ### 1. Pré-requisitos
 - Node.js 18+
-- Supabase CLI instalado: `npm install -g supabase`
-- Conta no Supabase, OpenAI e Leonardo AI
+- Postgres disponível (local ou remoto)
+- Conta no OpenAI e Leonardo AI
 
 ### 2. Instalação
 ```bash
@@ -27,31 +27,30 @@ cp .env.example .env
 ```
 
 ### 3. Banco de dados
-Execute as migrations em ordem no Supabase SQL Editor:
+Execute o schema em seu Postgres:
 ```
-supabase/migrations/
-```
-
-### 4. Edge Functions
-```bash
-supabase login
-supabase link --project-ref SEU_PROJECT_REF
-
-# Configure os secrets
-supabase secrets set AI_API_KEY=sk-...
-supabase secrets set OPENAI_API_KEY=sk-...
-supabase secrets set SERVICE_ROLE_KEY=...
-supabase secrets set LEONARDO_API_KEY=...
-supabase secrets set PAGARME_API_KEY=...
-
-# Deploy das functions
-supabase functions deploy --no-verify-jwt
+backend/schema.sql
 ```
 
-### 5. Rodar localmente
+### 4. Rodar localmente
 ```bash
 npm run dev
 ```
+
+## Backend (Render)
+
+Endpoints principais:
+- `POST /auth/login`
+- `POST /auth/register`
+- `GET /auth/me`
+- `GET /credits`
+- `GET /profile` / `PUT /profile`
+- `POST /ai-chat`
+- `POST /generate-posts`
+- `POST /generate-text`
+- `POST /generate-post-prompt`
+- `POST /generate-image`
+- `POST /logo-generator`
 
 ## Agentes de IA
 
@@ -79,9 +78,10 @@ npm run dev
 ## Sistema de Créditos
 
 - Chat (por mensagem): 1 crédito
-- Imagem padrão: 3 créditos
-- Imagem premium: 6 créditos
-- Logo (por mensagem): 2 créditos + 2/imagem gerada
+- Imagem padrão: 5 créditos
+- Imagem premium: 10 créditos
+- Logo (por mensagem): 2 créditos
+- Logo (por imagem): 5 créditos
 - Posts gerados: 2 créditos
 
 ## Licença

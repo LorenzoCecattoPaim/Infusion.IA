@@ -1,15 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+﻿import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
+import { fetchFunctions } from "@/lib/apiBase";
 
-type BusinessProfileRow =
-  Database["public"]["Tables"]["business_profiles"]["Row"];
-type BusinessProfileInsert =
-  Database["public"]["Tables"]["business_profiles"]["Insert"];
-type BusinessProfileUpdate =
-  Database["public"]["Tables"]["business_profiles"]["Update"];
-export type BusinessProfile = Partial<BusinessProfileRow>;
+export type BusinessProfile = Record<string, unknown>;
 
 const LOCAL_PROFILE_KEY = "infusion_business_profile";
 
@@ -47,15 +40,13 @@ export function useBusinessProfile() {
     queryFn: async () => {
       if (!user) return localFallback;
       try {
-        const { data } = await supabase
-          .from("business_profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle() as { data: { id: string } | null };
-        if (data) {
-          writeLocalProfile(data as BusinessProfile);
+        const res = await fetchFunctions("/profile");
+        if (!res.ok) return localFallback;
+        const data = await res.json();
+        if (data.profile) {
+          writeLocalProfile(data.profile as BusinessProfile);
         }
-        return (data as BusinessProfile | null) ?? localFallback;
+        return (data.profile as BusinessProfile | null) ?? localFallback;
       } catch (err) {
         console.error("[BusinessProfile] Erro ao carregar perfil", err);
         return localFallback;
@@ -65,31 +56,17 @@ export function useBusinessProfile() {
     initialData: localFallback ?? null,
   });
 
-  const persistProfile = async (updates: BusinessProfileUpdate) => {
+  const persistProfile = async (updates: BusinessProfile) => {
     const currentLocal = readLocalProfile() || {};
     const merged = { ...currentLocal, ...updates } as BusinessProfile;
     writeLocalProfile(merged);
 
     if (!user) return;
-    const { data: existing } = await supabase
-      .from("business_profiles")
-      .select("id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (existing?.id) {
-      await supabase
-        .from("business_profiles")
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        } as BusinessProfileUpdate)
-        .eq("user_id", user.id);
-    } else {
-      await supabase
-        .from("business_profiles")
-        .insert({ ...updates, user_id: user.id } as BusinessProfileInsert);
-    }
+    await fetchFunctions("/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json; charset=UTF-8" },
+      body: JSON.stringify(updates),
+    });
 
     queryClient.invalidateQueries({ queryKey: ["business_profile", user.id] });
   };

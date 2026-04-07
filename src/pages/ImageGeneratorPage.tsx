@@ -23,7 +23,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import DashboardLayout from "@/components/DashboardLayout";
-import { supabase } from "@/integrations/supabase/client";
 import { fetchFunctions } from "@/lib/apiBase";
 import { useCredits } from "@/hooks/useCredits";
 import { useGeneratedImages, type GeneratedImage } from "@/hooks/useGeneratedImages";
@@ -62,16 +61,10 @@ export default function ImageGeneratorPage() {
 
   const generateMutation = useMutation({
     mutationFn: async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
-      const res = await fetchFunctions("/functions/v1/generate-image", {
+      const res = await fetchFunctions("/generate-image", {
         method: "POST",
         headers: {
           "Content-Type": "application/json; charset=UTF-8",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ prompt, quality, template: selectedTemplate }),
       });

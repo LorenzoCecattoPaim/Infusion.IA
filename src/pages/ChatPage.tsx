@@ -4,7 +4,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import DashboardLayout from "@/components/DashboardLayout";
 import ChatMessage from "@/components/ChatMessage";
-import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBusinessProfile } from "@/hooks/useBusinessProfile";
 import { useAuth } from "@/hooks/useAuth";
@@ -93,24 +92,20 @@ export default function ChatPage() {
   }, [user]);
 
   const fetchHistory = async () => {
-    const { data } = await supabase
-      .from("chat_conversations")
-      .select("id, title, updated_at")
-      .order("updated_at", { ascending: false })
-      .limit(5);
-    setConversations((data || []) as ConversationSummary[]);
+    const res = await fetchFunctions("/chat/conversations");
+    if (!res.ok) return;
+    const data = await res.json();
+    setConversations((data.conversations || []) as ConversationSummary[]);
   };
 
   const loadConversation = async (id: string) => {
-    const { data } = await supabase
-      .from("chat_messages")
-      .select("id, role, content, created_at")
-      .eq("conversation_id", id)
-      .order("created_at", { ascending: true });
+    const res = await fetchFunctions(`/chat/conversations/${id}/messages`);
+    if (!res.ok) return;
+    const data = await res.json();
 
     setActiveConversationId(id);
     setMessages(
-      (data || []).map((m) => ({
+      (data.messages || []).map((m) => ({
         id: m.id,
         role: m.role as "user" | "assistant",
         content: m.content,
@@ -127,11 +122,13 @@ export default function ChatPage() {
   const createConversation = async (firstMessage: string) => {
     if (!user) return null;
     const title = buildTitle(firstMessage);
-    const { data } = await supabase
-      .from("chat_conversations")
-      .insert({ user_id: user.id, title })
-      .select("id")
-      .single();
+    const res = await fetchFunctions("/chat/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=UTF-8" },
+      body: JSON.stringify({ title }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
     if (data?.id) {
       setActiveConversationId(data.id);
     }
@@ -140,16 +137,11 @@ export default function ChatPage() {
 
   const persistMessage = async (conversationId: string, role: "user" | "assistant", content: string) => {
     if (!user) return;
-    await supabase.from("chat_messages").insert({
-      conversation_id: conversationId,
-      user_id: user.id,
-      role,
-      content,
+    await fetchFunctions(`/chat/conversations/${conversationId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=UTF-8" },
+      body: JSON.stringify({ role, content }),
     });
-    await supabase
-      .from("chat_conversations")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", conversationId);
   };
 
   const handleSend = async (text?: string) => {
@@ -178,21 +170,15 @@ export default function ChatPage() {
         await persistMessage(conversationId, "user", userMessage);
       }
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
       const allMessages = [...messages, newMsg].map((m) => ({
         role: m.role,
         content: m.content,
       }));
 
-      const response = await fetchFunctions("/functions/v1/ai-chat", {
+      const response = await fetchFunctions("/ai-chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json; charset=UTF-8",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           messages: allMessages,

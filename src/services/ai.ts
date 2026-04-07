@@ -1,10 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
-import { fetchFunctions } from "@/lib/apiBase";
-
-async function getAuthToken(): Promise<string | null> {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
-}
+﻿import { fetchFunctions } from "@/lib/apiBase";
 
 export interface GeneratePostsPayload {
   canal?: string;
@@ -46,14 +40,10 @@ export interface GenerateTextResponse {
 export async function generatePosts(
   payload: GeneratePostsPayload
 ): Promise<GeneratePostsResponse> {
-  const token = await getAuthToken();
-  if (!token) throw new Error("Usuário não autenticado");
-
-  const res = await fetchFunctions("/functions/v1/generate-posts", {
+  const res = await fetchFunctions("/generate-posts", {
     method: "POST",
     headers: {
       "Content-Type": "application/json; charset=UTF-8",
-      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
   });
@@ -71,14 +61,10 @@ export async function generatePosts(
 export async function generateText(
   payload: GenerateTextPayload
 ): Promise<GenerateTextResponse> {
-  const token = await getAuthToken();
-  if (!token) throw new Error("Usuário não autenticado");
-
-  const res = await fetchFunctions("/functions/v1/generate-text", {
+  const res = await fetchFunctions("/generate-text", {
     method: "POST",
     headers: {
       "Content-Type": "application/json; charset=UTF-8",
-      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
   });
@@ -111,14 +97,10 @@ export interface GeneratePostPromptResponse {
 export async function generatePostPrompt(
   payload: GeneratePostPromptPayload
 ): Promise<GeneratePostPromptResponse> {
-  const token = await getAuthToken();
-  if (!token) throw new Error("Usuário não autenticado");
-
-  const res = await fetchFunctions("/functions/v1/generate-post-prompt", {
+  const res = await fetchFunctions("/generate-post-prompt", {
     method: "POST",
     headers: {
       "Content-Type": "application/json; charset=UTF-8",
-      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
   });
@@ -138,14 +120,10 @@ export async function generateImage(payload: {
   template?: string | null;
   format?: string;
 }) {
-  const token = await getAuthToken();
-  if (!token) throw new Error("Usuário não autenticado");
-
-  const res = await fetchFunctions("/functions/v1/generate-image", {
+  const res = await fetchFunctions("/generate-image", {
     method: "POST",
     headers: {
       "Content-Type": "application/json; charset=UTF-8",
-      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
   });
