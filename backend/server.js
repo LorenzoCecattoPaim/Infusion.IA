@@ -32,43 +32,51 @@ function getSupabase() {
   });
 }
 
-const defaultAllowedOrigins = [
+const allowedOrigins = [
   "https://infusion-ia.vercel.app",
-  "https://*.vercel.app",
-  "http://localhost:5173",
-  "http://localhost:4173",
+  "https://infusion-ia-git-main-dev-lore.vercel.app",
+  "http://localhost:3000",
 ];
 
-const rawAllowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim()).filter(Boolean)
-  : defaultAllowedOrigins;
-
-function originToRegex(origin) {
-  const escaped = origin
-    .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*/g, ".*");
-  return new RegExp(`^${escaped}$`);
+function isOriginAllowed(origin) {
+  return !!origin && allowedOrigins.includes(origin);
 }
 
-const allowedOriginRegexes = rawAllowedOrigins.map(originToRegex);
+function resolveCorsOrigin(origin) {
+  if (!origin) return null;
+  return isOriginAllowed(origin) ? origin : null;
+}
 
-const corsConfig = cors({
-  origin: (origin, callback) => {
-    if (!origin) {
-      return callback(null, true);
-    }
-    if (rawAllowedOrigins.includes("*")) {
-      return callback(null, true);
-    }
-    const isAllowed = allowedOriginRegexes.some((re) => re.test(origin));
-    return callback(isAllowed ? null : new Error("Not allowed by CORS"), isAllowed);
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+    const allowed = isOriginAllowed(origin);
+    return callback(allowed ? null : new Error("Not allowed by CORS"), allowed);
   },
-  methods: ["GET", "POST", "PUT", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
+
+app.use((req, res, next) => {
+  const origin = resolveCorsOrigin(req.headers.origin);
+  if (origin) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Credentials", "true");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
+  next();
 });
 
-app.use(corsConfig);
-app.options("*", corsConfig);
 app.use(express.json({ limit: "5mb" }));
 
 function sendSuccess(res, data = {}, status = 200) {
@@ -104,6 +112,9 @@ async function requireAuth(req, res, next) {
 
 app.get("/health", (_req, res) => {
   sendSuccess(res, { ok: true });
+});
+app.get("/cors-test", (_req, res) => {
+  res.json({ ok: true });
 });
 app.get("/credits", requireAuth, async (req, res) => {
   try {
@@ -1105,6 +1116,18 @@ app.post("/logo-generator", requireAuth, async (req, res) => {
     console.error("[LOGO] error", error);
     return sendError(res, 500, "Erro ao processar logo");
   }
+});
+
+app.use((err, req, res, _next) => {
+  const origin = resolveCorsOrigin(req.headers.origin);
+  if (origin) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.status(500).json({
+    error: "Internal server error",
+    message: err?.message || "Unexpected error",
+  });
 });
 
 const port = Number(process.env.PORT || 10000);
