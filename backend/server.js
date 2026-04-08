@@ -60,6 +60,25 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  // libera qualquer origem da Vercel temporariamente (debug)
+  if (origin && origin.includes("vercel.app")) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "*");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
+
 /* ========================= */
 
 app.use(express.json({ limit: "5mb" }));
