@@ -1,4 +1,7 @@
-const AI_API_BASE = "https://api.openai.com/v1";
+const AI_API_BASE =
+  process.env.AI_PROVIDER === "openai"
+    ? "https://api.openai.com/v1"
+    : "https://openrouter.ai/api/v1";
 const DEFAULT_SYSTEM_PROMPT =
   "Você é um assistente útil, direto e confiável. Responda com clareza e objetividade.";
 const DEFAULT_FAILSAFE_MESSAGE =
@@ -248,25 +251,34 @@ export async function callAgent(options) {
       headers: {
         "Content-Type": "application/json; charset=UTF-8",
         Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://infusion-ia.vercel.app",
+        "X-Title": "Infusion IA",
       },
       body: JSON.stringify(body),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
+
       console.error(
         `[AI] ${debugTag} error`,
         `AI API error ${response.status}: ${errorText}`
       );
+
+      if (response.status === 429) {
+        return "Limite de uso da IA atingido. Tente novamente em instantes.";
+      }
+
+      if (response.status === 401) {
+        return "Erro de autenticação com a IA.";
+      }
+
       if (stream) {
         throw new Error(`AI API error ${response.status}: ${errorText}`);
       }
-      return failSafeMessage;
-    }
 
-    if (stream) {
-      return response;
-    }
+      return failSafeMessage;
+    } 
 
     const data = await response.json().catch(() => null);
     console.log(`[AI] ${debugTag} response`, toDebugText(data));
@@ -293,7 +305,7 @@ export async function validateWithAgent(content) {
   }
 
   try {
-    const model = process.env.AI_MODEL_VALIDATOR || "gpt-4o-mini";
+    model = process.env.AI_MODEL_MARKETING || "openai/gpt-4o-mini"
     const result = await callAgent({
       systemPrompt: AGENTE_5_VALIDADOR,
       messages: [
