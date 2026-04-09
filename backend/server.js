@@ -629,8 +629,17 @@ app.use((err, req, res, _next) => {
 
 const port = Number(process.env.PORT || 10000);
 
-syncPlanCatalog().finally(() => {
-  app.listen(port, () => {
-    console.log(`🚀 Backend rodando na porta ${port}`);
-  });
+
+app.listen(port, () => {
+  console.log(`🚀 Backend rodando na porta ${port}`);
 });
+
+(async () => {
+  try {
+    await syncPlanCatalog();
+    console.log(" Planos sincronizados");
+  } catch (err) {
+    console.error(" Falha ao sincronizar planos:", err);
+  }
+})();
+
