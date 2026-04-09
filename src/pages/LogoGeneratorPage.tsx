@@ -15,6 +15,7 @@ import { fetchFunctions } from "@/lib/apiBase";
 import { useCredits } from "@/hooks/useCredits";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { CREDIT_COSTS } from "@/lib/credits";
 
 interface Message {
   id: string;
@@ -46,6 +47,7 @@ export default function LogoGeneratorPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { credits } = useCredits();
+  const imageCost = CREDIT_COSTS.image;
 
   useEffect(() => {
     setMessages([
@@ -67,6 +69,11 @@ export default function LogoGeneratorPage() {
   }, [messages, logos]);
 
   const callLogoApi = async (payload: Record<string, unknown>) => {
+    if (credits < imageCost) {
+      throw new Error(
+        `Créditos insuficientes. Necessário: ${imageCost}, disponível: ${credits}`
+      );
+    }
     const res = await fetchFunctions("/logo-generator", {
       method: "POST",
       headers: {
@@ -362,7 +369,7 @@ export default function LogoGeneratorPage() {
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1.5">
-            Cada mensagem consome créditos • Infusion.IA Logo Creator
+            Cada geração consome {imageCost} créditos • Infusion.IA Logo Creator
           </p>
         </div>
 

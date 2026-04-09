@@ -67,12 +67,8 @@ Endpoints principais:
 
 ## Sistema de Créditos
 
-- Chat (por mensagem): 1 crédito
-- Imagem padrão: 5 créditos
-- Imagem premium: 10 créditos
-- Logo (por mensagem): 2 créditos
-- Logo (por imagem): 5 créditos
-- Posts gerados: 2 créditos
+- Texto (por uso): 5 créditos
+- Imagem (por uso): 15 créditos
 
 ## Licença
 

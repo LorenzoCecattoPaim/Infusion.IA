@@ -1,4 +1,4 @@
-import {
+ï»¿import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -6,107 +6,134 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Zap, Sparkles, Crown } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  ANNUAL_PLANS,
+  MONTHLY_PLANS,
+  formatBRL,
+  savingsPercent,
+} from "@/lib/plans";
 
 interface BuyCreditsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-const PLANS = [
-  {
-    id: "starter",
-    label: "Starter",
-    credits: 100,
-    price: "R$ 19,90",
-    icon: Zap,
-    highlight: false,
-    description: "Ideal para começar",
-  },
-  {
-    id: "pro",
-    label: "Pro",
-    credits: 300,
-    price: "R$ 49,90",
-    icon: Sparkles,
-    highlight: true,
-    description: "Mais popular",
-  },
-  {
-    id: "business",
-    label: "Business",
-    credits: 1000,
-    price: "R$ 129,90",
-    icon: Crown,
-    highlight: false,
-    description: "Para times e agências",
-  },
-];
-
 const PLANOS_URL = "https://infusionai-hub.lovable.app/#planos";
 
-export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialogProps) {
-  const handleOpenPlans = () => {
-    window.location.href = PLANOS_URL;
-  };
+function PlanRow({
+  name,
+  oldPrice,
+  price,
+  highlight,
+  subtitle,
+  badge,
+}: {
+  name: string;
+  oldPrice: string;
+  price: string;
+  highlight?: boolean;
+  subtitle?: string;
+  badge?: string;
+}) {
+  return (
+    <div
+      className={`relative rounded-xl border p-4 flex flex-col gap-2 transition-all ${
+        highlight
+          ? "border-primary/50 bg-primary/5 shadow-glow"
+          : "border-border hover:border-primary/30"
+      }`}
+    >
+      {highlight && (
+        <span className="absolute -top-2.5 left-4 text-[10px] font-bold gradient-primary text-primary-foreground px-2 py-0.5 rounded-full">
+          Mais popular
+        </span>
+      )}
+      <div className="flex items-center justify-between">
+        <p className="font-semibold text-foreground text-sm">{name}</p>
+        {badge && (
+          <Badge className="text-[10px] bg-foreground text-background">
+            {badge}
+          </Badge>
+        )}
+      </div>
+      <div className="text-xs text-muted-foreground">
+        <span className="line-through mr-2">{oldPrice}</span>
+        <span className="text-foreground font-semibold">{price}</span>
+      </div>
+      {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+      <Button
+        size="sm"
+        className="gradient-primary text-primary-foreground hover:opacity-90"
+        onClick={() => {
+          window.location.href = PLANOS_URL;
+        }}
+      >
+        Ver planos
+      </Button>
+    </div>
+  );
+}
 
+export default function BuyCreditsDialog({ open, onOpenChange }: BuyCreditsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg bg-card border-border">
+      <DialogContent className="max-w-2xl bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="font-display text-foreground">Ver planos</DialogTitle>
+          <DialogTitle className="font-display text-foreground">Planos e crÃ©ditos</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Compare os planos e escolha o ideal para o seu negócio
+            Compare mensal e anual e escolha o melhor custo-benefÃ­cio
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3 mt-2">
-          {PLANS.map((plan) => (
-            <div
-              key={plan.id}
-              className={`relative rounded-xl border p-4 flex items-center justify-between transition-all ${
-                plan.highlight
-                  ? "border-primary/50 bg-primary/5 shadow-glow"
-                  : "border-border hover:border-primary/30"
-              }`}
-            >
-              {plan.highlight && (
-                <span className="absolute -top-2.5 left-4 text-[10px] font-bold gradient-primary text-primary-foreground px-2 py-0.5 rounded-full">
-                  Mais popular
-                </span>
-              )}
-              <div className="flex items-center gap-3">
-                <div className="gradient-primary rounded-lg p-2">
-                  <plan.icon className="h-4 w-4 text-primary-foreground" />
-                </div>
-                <div>
-                  <p className="font-semibold text-foreground text-sm">{plan.label}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {plan.credits} créditos • {plan.description}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="font-bold text-foreground">{plan.price}</span>
-                <Button
-                  size="sm"
-                  className="gradient-primary text-primary-foreground hover:opacity-90"
-                  onClick={handleOpenPlans}
-                >
-                  Ver planos
-                </Button>
-              </div>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Planos mensais
+            </p>
+            <div className="grid gap-3 md:grid-cols-3">
+              {MONTHLY_PLANS.map((plan) => (
+                <PlanRow
+                  key={plan.id}
+                  name={plan.name}
+                  oldPrice={formatBRL(plan.oldPrice)}
+                  price={formatBRL(plan.price)}
+                  highlight={plan.highlight}
+                  subtitle={`${plan.credits} crÃ©ditos por mÃªs`}
+                />
+              ))}
             </div>
-          ))}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Planos anuais
+            </p>
+            <div className="grid gap-3 md:grid-cols-3">
+              {ANNUAL_PLANS.map((plan) => (
+                <PlanRow
+                  key={plan.id}
+                  name={plan.name}
+                  oldPrice={formatBRL(plan.oldPrice)}
+                  price={formatBRL(plan.price)}
+                  highlight={plan.highlight}
+                  subtitle={plan.benefit || undefined}
+                  badge={`Economize ${savingsPercent(plan)}%`}
+                />
+              ))}
+            </div>
+          </div>
         </div>
 
-        <p className="text-xs text-muted-foreground text-center mt-2">
-          Pagamento seguro via Pagar.me • Créditos adicionados imediatamente após confirmação
+        <p className="text-xs text-muted-foreground text-center">
+          Pagamento seguro via Pagar.me â€¢ CrÃ©ditos adicionados imediatamente apÃ³s confirmaÃ§Ã£o
         </p>
         <Button
           variant="outline"
-          className="w-full mt-2"
-          onClick={handleOpenPlans}
+          className="w-full"
+          onClick={() => {
+            window.location.href = PLANOS_URL;
+          }}
         >
           Ver planos completos
         </Button>

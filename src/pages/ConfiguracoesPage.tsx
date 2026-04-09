@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import PlansSection from "@/components/PlansSection";
 
 const integrations = [
   {
@@ -98,6 +99,8 @@ export default function ConfiguracoesPage() {
             </p>
           </CardContent>
         </Card>
+
+        <PlansSection />
 
         {/* Integrations */}
         <Card className="bg-card border-border shadow-card">

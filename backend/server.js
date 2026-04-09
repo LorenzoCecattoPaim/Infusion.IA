@@ -9,7 +9,7 @@ import {
   AGENTE_6_GERADOR_TEXTO,
   AGENTE_7_GERADOR_POSTS_IMAGEM,
   AGENTE_LOGO_PROMPT_BUILDER,
-  callAgent,
+  executarAgente,
   renderBusinessPrompt,
   safeParseJSON,
   validateWithAgent,
@@ -104,6 +104,110 @@ function sendError(res, status, message) {
   res.status(status).json({ error: message });
 }
 
+const DEFAULT_FREE_CREDITS = 100;
+const CREDIT_COSTS = {
+  text: 5,
+  image: 15,
+};
+
+const PLAN_CATALOG = {
+  monthly: [
+    {
+      id: "aprendiz_mensal",
+      name: "Aprendiz",
+      oldPrice: 129,
+      price: 89,
+      credits: 100,
+      highlight: false,
+    },
+    {
+      id: "avancado_mensal",
+      name: "Avançado",
+      oldPrice: 239,
+      price: 149,
+      credits: 250,
+      highlight: true,
+    },
+    {
+      id: "profissional_mensal",
+      name: "Profissional",
+      oldPrice: 499,
+      price: 299,
+      credits: 1000,
+      highlight: false,
+    },
+  ],
+  annual: [
+    {
+      id: "aprendiz_anual",
+      name: "Aprendiz",
+      oldPrice: 1079,
+      price: 988,
+      benefit: "Ganhe 1 mês grátis",
+      highlight: false,
+    },
+    {
+      id: "avancado_anual",
+      name: "Avançado",
+      oldPrice: 1799,
+      price: 1649,
+      benefit: "Ganhe 1 mês grátis",
+      highlight: true,
+    },
+    {
+      id: "profissional_anual",
+      name: "Profissional",
+      oldPrice: 3588,
+      price: 2990,
+      benefit: "Ganhe 2 meses grátis",
+      highlight: false,
+    },
+  ],
+};
+
+function buildPlanRows() {
+  const monthly = PLAN_CATALOG.monthly.map((plan) => ({
+    id: plan.id,
+    name: plan.name,
+    billing_cycle: "mensal",
+    price: plan.price,
+    old_price: plan.oldPrice,
+    credits: plan.credits ?? null,
+    benefit: plan.benefit ?? null,
+    is_popular: Boolean(plan.highlight),
+  }));
+
+  const annual = PLAN_CATALOG.annual.map((plan) => ({
+    id: plan.id,
+    name: plan.name,
+    billing_cycle: "anual",
+    price: plan.price,
+    old_price: plan.oldPrice,
+    credits: plan.credits ?? null,
+    benefit: plan.benefit ?? null,
+    is_popular: Boolean(plan.highlight),
+  }));
+
+  return [...monthly, ...annual];
+}
+
+async function syncPlanCatalog() {
+  try {
+    const supabase = getSupabase();
+    const rows = buildPlanRows();
+    const { error } = await supabase.from("plans").upsert(rows, {
+      onConflict: "id",
+    });
+    if (error) {
+      console.warn("[PLANS] falha ao sincronizar catálogo", error.message);
+    } else {
+      console.log("[PLANS] catálogo sincronizado");
+    }
+  } catch (error) {
+    console.warn("[PLANS] sincronização ignorada", error?.message || error);
+  }
+}
+
 function getBearerToken(req) {
   const authHeader = req.headers.authorization || req.headers.Authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
@@ -123,6 +227,72 @@ async function requireAuth(req, res, next) {
   next();
 }
 
+async function ensureCreditsRow(supabase, userId) {
+  const { data, error } = await supabase
+    .from("user_credits")
+    .select("credits, plan")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (!data) {
+    const { data: created, error: insertError } = await supabase
+      .from("user_credits")
+      .insert({ user_id: userId, credits: DEFAULT_FREE_CREDITS, plan: "free" })
+      .select("credits, plan")
+      .single();
+    if (insertError) throw insertError;
+    return created;
+  }
+
+  return data;
+}
+
+async function consumeCredits({ supabase, userId, amount, reason }) {
+  const attempts = 2;
+  for (let i = 0; i < attempts; i += 1) {
+    const current = await ensureCreditsRow(supabase, userId);
+    const available = Number(current.credits || 0);
+
+    if (available < amount) {
+      return { ok: false, credits: available, plan: current.plan || "free" };
+    }
+
+    const next = available - amount;
+    const { data, error } = await supabase
+      .from("user_credits")
+      .update({ credits: next })
+      .eq("user_id", userId)
+      .eq("credits", available)
+      .select("credits, plan")
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (data) {
+      console.log(
+        `[CREDITS] consumo=${amount} user=${userId} reason=${reason} restante=${data.credits}`
+      );
+      return { ok: true, credits: data.credits, plan: data.plan || "free" };
+    }
+  }
+
+  const refreshed = await ensureCreditsRow(supabase, userId);
+  return {
+    ok: Number(refreshed.credits || 0) >= amount,
+    credits: Number(refreshed.credits || 0),
+    plan: refreshed.plan || "free",
+  };
+}
+
+function sendInsufficientCredits(res, credits) {
+  res.status(402).json({
+    error: "Créditos insuficientes.",
+    credits,
+  });
+}
+
 /* ========================= ROUTES ========================= */
 
 app.get("/health", (_req, res) => {
@@ -133,30 +303,20 @@ app.get("/cors-test", (_req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/plans", (_req, res) => {
+  sendSuccess(res, {
+    monthly: PLAN_CATALOG.monthly,
+    annual: PLAN_CATALOG.annual,
+    credit_costs: CREDIT_COSTS,
+  });
+});
+
 /* -------- CREDITS -------- */
 
 app.get("/credits", requireAuth, async (req, res) => {
   try {
     const supabase = getSupabase();
-
-    const { data, error } = await supabase
-      .from("user_credits")
-      .select("credits, plan")
-      .eq("user_id", req.user.id)
-      .maybeSingle();
-
-    if (error) throw error;
-
-    if (!data) {
-      const { data: created } = await supabase
-        .from("user_credits")
-        .insert({ user_id: req.user.id, credits: 100, plan: "free" })
-        .select("credits, plan")
-        .single();
-
-      return sendSuccess(res, created);
-    }
-
+    const data = await ensureCreditsRow(supabase, req.user.id);
     return sendSuccess(res, data);
   } catch (error) {
     console.error("[CREDITS]", error);
@@ -221,18 +381,205 @@ app.post("/ai-chat", requireAuth, async (req, res) => {
       return sendError(res, 400, "messages required");
     }
 
-    const text = await callAgent({
+    const supabase = getSupabase();
+    const creditResult = await consumeCredits({
+      supabase,
+      userId: req.user.id,
+      amount: CREDIT_COSTS.text,
+      reason: "ai-chat",
+    });
+
+    if (!creditResult.ok) {
+      return sendInsufficientCredits(res, creditResult.credits);
+    }
+
+    const text = await executarAgente({
+      agente: "AGENTE_1_CONSULTOR_MARKETING",
       systemPrompt: AGENTE_1_CONSULTOR_MARKETING,
       messages,
-      model: process.env.AI_MODEL_MARKETING || "gpt-4o",
     });
 
     return sendSuccess(res, {
       choices: [{ message: { role: "assistant", content: text } }],
+      credits: creditResult.credits,
     });
   } catch (error) {
     console.error("[AI-CHAT]", error);
     return sendError(res, 500, "Erro interno");
+  }
+});
+
+/* -------- GENERATE TEXT -------- */
+
+app.post("/generate-text", requireAuth, async (req, res) => {
+  try {
+    const {
+      tipo_conteudo,
+      descricao,
+      publico_alvo,
+      tom_voz,
+      variation,
+      refine_notes,
+      previous_text,
+    } = req.body || {};
+
+    if (!tipo_conteudo || !descricao) {
+      return sendError(res, 400, "tipo_conteudo e descricao são obrigatórios");
+    }
+
+    const supabase = getSupabase();
+    const creditResult = await consumeCredits({
+      supabase,
+      userId: req.user.id,
+      amount: CREDIT_COSTS.text,
+      reason: "generate-text",
+    });
+
+    if (!creditResult.ok) {
+      return sendInsufficientCredits(res, creditResult.credits);
+    }
+
+    const refinement = variation
+      ? "Gere uma variação criativa do texto."
+      : refine_notes
+        ? `Refine com base nas notas: ${refine_notes}`
+        : "";
+
+    const basePrompt = [
+      `Tipo de conteúdo: ${tipo_conteudo}`,
+      `Descrição: ${descricao}`,
+      publico_alvo ? `Público-alvo: ${publico_alvo}` : null,
+      tom_voz ? `Tom de voz: ${tom_voz}` : null,
+      previous_text ? `Texto anterior: ${previous_text}` : null,
+      refinement || null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const text = await executarAgente({
+      agente: "AGENTE_6_GERADOR_TEXTO",
+      systemPrompt: AGENTE_6_GERADOR_TEXTO,
+      messages: [{ role: "user", content: basePrompt }],
+      requireJson: true,
+      temperature: 0.7,
+      maxTokens: 1200,
+      preferHighQuality: true,
+      debugTag: "generate-text",
+    });
+
+    const parsed = safeParseJSON(text, {
+      texto: "",
+      sugestoes: [],
+      prompt: null,
+    });
+
+    return sendSuccess(res, { ...parsed, credits: creditResult.credits });
+  } catch (error) {
+    console.error("[GENERATE-TEXT]", error);
+    return sendError(res, 500, "Erro ao gerar texto.");
+  }
+});
+
+/* -------- GENERATE POSTS -------- */
+
+app.post("/generate-posts", requireAuth, async (req, res) => {
+  try {
+    const { objetivo, tipo_conteudo, canal, brief, channels } = req.body || {};
+
+    if (!objetivo || !tipo_conteudo) {
+      return sendError(res, 400, "objetivo e tipo_conteudo são obrigatórios");
+    }
+
+    const supabase = getSupabase();
+    const creditResult = await consumeCredits({
+      supabase,
+      userId: req.user.id,
+      amount: CREDIT_COSTS.text,
+      reason: "generate-posts",
+    });
+
+    if (!creditResult.ok) {
+      return sendInsufficientCredits(res, creditResult.credits);
+    }
+
+    const payload = [
+      `Objetivo: ${objetivo}`,
+      `Tipo de conteúdo: ${tipo_conteudo}`,
+      canal ? `Canal: ${canal}` : null,
+      channels?.length ? `Canais: ${channels.join(", ")}` : null,
+      brief ? `Brief: ${brief}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const response = await executarAgente({
+      agente: "AGENTE_3_GERADOR_POSTS",
+      systemPrompt: AGENTE_3_GERADOR_POSTS,
+      messages: [{ role: "user", content: payload }],
+      requireJson: true,
+      temperature: 0.7,
+      maxTokens: 1400,
+      preferHighQuality: true,
+      debugTag: "generate-posts",
+    });
+
+    const parsed = safeParseJSON(response, { posts: [] });
+    return sendSuccess(res, { ...parsed, credits: creditResult.credits });
+  } catch (error) {
+    console.error("[GENERATE-POSTS]", error);
+    return sendError(res, 500, "Erro ao gerar posts.");
+  }
+});
+
+/* -------- GENERATE POST PROMPT -------- */
+
+app.post("/generate-post-prompt", requireAuth, async (req, res) => {
+  try {
+    const {
+      tipo_post,
+      descricao,
+      formato,
+      estilo,
+      incluir_espaco_logo,
+      logo_presente,
+    } = req.body || {};
+
+    if (!tipo_post || !descricao || !formato || !estilo) {
+      return sendError(res, 400, "Dados insuficientes para gerar o prompt.");
+    }
+
+    const prompt = [
+      `Tipo de post: ${tipo_post}`,
+      `Descrição: ${descricao}`,
+      `Formato: ${formato}`,
+      `Estilo visual: ${estilo}`,
+      `Incluir espaço para logo: ${incluir_espaco_logo ? "Sim" : "Não"}`,
+      `Logo presente: ${logo_presente ? "Sim" : "Não"}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const response = await executarAgente({
+      agente: "AGENTE_7_GERADOR_POSTS_IMAGEM",
+      systemPrompt: AGENTE_7_GERADOR_POSTS_IMAGEM,
+      messages: [{ role: "user", content: prompt }],
+      requireJson: true,
+      temperature: 0.6,
+      maxTokens: 1200,
+      preferHighQuality: true,
+      debugTag: "generate-post-prompt",
+    });
+
+    const parsed = safeParseJSON(response, {
+      prompt: "",
+      perguntas: [],
+      observacoes: "",
+    });
+
+    return sendSuccess(res, parsed);
+  } catch (error) {
+    console.error("[POST-PROMPT]", error);
+    return sendError(res, 500, "Erro ao gerar prompt do post.");
   }
 });
 
@@ -243,8 +590,21 @@ app.post("/generate-image", requireAuth, async (req, res) => {
     const { prompt } = req.body || {};
     if (!prompt) return sendError(res, 400, "prompt required");
 
+    const supabase = getSupabase();
+    const creditResult = await consumeCredits({
+      supabase,
+      userId: req.user.id,
+      amount: CREDIT_COSTS.image,
+      reason: "generate-image",
+    });
+
+    if (!creditResult.ok) {
+      return sendInsufficientCredits(res, creditResult.credits);
+    }
+
     return sendSuccess(res, {
       images: [{ url: "placeholder" }],
+      credits: creditResult.credits,
     });
   } catch (error) {
     console.error("[IMAGE]", error);
@@ -269,6 +629,8 @@ app.use((err, req, res, _next) => {
 
 const port = Number(process.env.PORT || 10000);
 
-app.listen(port, () => {
-  console.log(`🚀 Backend rodando na porta ${port}`);
+syncPlanCatalog().finally(() => {
+  app.listen(port, () => {
+    console.log(`🚀 Backend rodando na porta ${port}`);
+  });
 });

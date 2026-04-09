@@ -20,6 +20,7 @@ import { useCredits } from "@/hooks/useCredits";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { GeneratedImage } from "@/hooks/useGeneratedImages";
+import { CREDIT_COSTS } from "@/lib/credits";
 
 const TIPOS = ["Produto", "Promocional", "Institucional", "Datas comemorativas"];
 const FORMATOS = [
@@ -40,6 +41,7 @@ interface HistoryImage {
 export default function PostGeneratorPage() {
   const { credits } = useCredits();
   const queryClient = useQueryClient();
+  const imageCost = CREDIT_COSTS.image;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
@@ -81,6 +83,12 @@ export default function PostGeneratorPage() {
   const handleGenerate = async (overridePrompt?: string) => {
     if (!descricao.trim()) {
       toast.error("Descreva o post que você quer gerar.");
+      return;
+    }
+    if (credits < imageCost) {
+      toast.error(
+        `Créditos insuficientes. Necessário: ${imageCost}, disponível: ${credits}`
+      );
       return;
     }
 
@@ -326,10 +334,13 @@ export default function PostGeneratorPage() {
                   </>
                 ) : (
                   <>
-                    <Sparkles className="h-4 w-4 mr-2" /> Gerar Post
+                    <Sparkles className="h-4 w-4 mr-2" /> Gerar Post — {imageCost} créditos
                   </>
                 )}
               </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                Custo por geração: {imageCost} créditos
+              </p>
             </CardContent>
           </Card>
 

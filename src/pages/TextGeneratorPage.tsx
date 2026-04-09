@@ -10,6 +10,7 @@ import { generateText, type GenerateTextResponse } from "@/services/ai";
 import { useCredits } from "@/hooks/useCredits";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { CREDIT_COSTS } from "@/lib/credits";
 
 const CONTENT_TYPES = [
   { value: "Legenda Instagram", label: "Legenda Instagram", limit: 2200 },
@@ -31,6 +32,7 @@ interface HistoryItem extends GenerateTextResponse {
 export default function TextGeneratorPage() {
   const { credits } = useCredits();
   const queryClient = useQueryClient();
+  const textCost = CREDIT_COSTS.text;
   const [tipo, setTipo] = useState(CONTENT_TYPES[0].value);
   const [descricao, setDescricao] = useState("");
   const [publico, setPublico] = useState("");
@@ -45,6 +47,12 @@ export default function TextGeneratorPage() {
   const handleGenerate = async (opts?: { variation?: boolean; refine?: boolean }) => {
     if (!descricao.trim()) {
       toast.error("Descreva o que você quer gerar.");
+      return;
+    }
+    if (credits < textCost) {
+      toast.error(
+        `Créditos insuficientes. Necessário: ${textCost}, disponível: ${credits}`
+      );
       return;
     }
 
@@ -203,10 +211,13 @@ export default function TextGeneratorPage() {
                 ) : (
                   <>
                     <Wand2 className="h-4 w-4 mr-2" />
-                    Gerar Texto
+                    Gerar Texto — {textCost} créditos
                   </>
                 )}
               </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                Custo por geração: {textCost} créditos
+              </p>
             </CardContent>
           </Card>
 

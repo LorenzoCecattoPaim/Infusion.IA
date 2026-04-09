@@ -7,9 +7,11 @@ import ChatMessage from "@/components/ChatMessage";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBusinessProfile } from "@/hooks/useBusinessProfile";
 import { useAuth } from "@/hooks/useAuth";
+import { useCredits } from "@/hooks/useCredits";
 import { buildRagContext } from "@/lib/rag";
 import { fetchFunctions } from "@/lib/apiBase";
 import { toast } from "sonner";
+import { CREDIT_COSTS } from "@/lib/credits";
 
 interface Message {
   id: string;
@@ -88,6 +90,8 @@ export default function ChatPage() {
   const queryClient = useQueryClient();
   const { profile: businessProfile } = useBusinessProfile();
   const { user } = useAuth();
+  const { credits } = useCredits();
+  const textCost = CREDIT_COSTS.text;
   const companyName =
     typeof businessProfile?.nome_empresa === "string"
       ? businessProfile.nome_empresa
@@ -158,6 +162,12 @@ export default function ChatPage() {
   const handleSend = async (text?: string) => {
     const userMessage = text ? text.trim() : input.trim();
     if (!userMessage || isLoading) return;
+    if (credits < textCost) {
+      toast.error(
+        `Créditos insuficientes. Necessário: ${textCost}, disponível: ${credits}`
+      );
+      return;
+    }
     setInput("");
 
     const newMsg: Message = {
@@ -416,7 +426,7 @@ export default function ChatPage() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Especialista de Marketing com IA • Powered by Infusion.IA • 1 crédito por mensagem
+              Especialista de Marketing com IA • Powered by Infusion.IA • {textCost} créditos por mensagem
             </p>
           </div>
         </div>

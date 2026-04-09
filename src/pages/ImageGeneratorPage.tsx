@@ -28,6 +28,7 @@ import { useCredits } from "@/hooks/useCredits";
 import { useGeneratedImages, type GeneratedImage } from "@/hooks/useGeneratedImages";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { CREDIT_COSTS } from "@/lib/credits";
 
 const templates = [
   { id: "post-instagram", label: "Post Instagram", icon: Image },
@@ -47,6 +48,7 @@ export default function ImageGeneratorPage() {
   const queryClient = useQueryClient();
   const { credits } = useCredits();
   const { generatedImages, isLoading: imagesLoading } = useGeneratedImages();
+  const imageCost = CREDIT_COSTS.image;
 
   // Keyboard shortcut Ctrl/Cmd+Enter
   useEffect(() => {
@@ -98,7 +100,7 @@ export default function ImageGeneratorPage() {
       toast.error("Descreva a imagem que você quer criar.");
       return;
     }
-    const cost = quality === "premium" ? 10 : 5;
+    const cost = imageCost;
     if (credits < cost) {
       toast.error(`Créditos insuficientes. Necessário: ${cost}, disponível: ${credits}`);
       return;
@@ -147,7 +149,7 @@ export default function ImageGeneratorPage() {
               <Badge
                 variant="outline"
                 className={
-                  credits < 5
+                  credits < imageCost
                     ? "border-destructive text-destructive"
                     : "border-border text-muted-foreground"
                 }
@@ -212,14 +214,14 @@ export default function ImageGeneratorPage() {
                     id: "standard",
                     label: "Padrão",
                     icon: Zap,
-                    cost: 5,
+                    cost: imageCost,
                     desc: "Rápido e eficiente",
                   },
                   {
                     id: "premium",
                     label: "Premium",
                     icon: Crown,
-                    cost: 10,
+                    cost: imageCost,
                     desc: "Alta resolução",
                   },
                 ].map((q) => (
@@ -267,8 +269,7 @@ export default function ImageGeneratorPage() {
               ) : (
                 <>
                   <Sparkles className="h-4 w-4 mr-2" />
-                  Gerar imagens —{" "}
-                  {quality === "premium" ? 10 : 5} créditos
+                  Gerar imagens — {imageCost} créditos
                 </>
               )}
             </Button>

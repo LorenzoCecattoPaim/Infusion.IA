@@ -1,12 +1,18 @@
-const AI_API_BASE =
-  process.env.AI_PROVIDER === "openai"
-    ? "https://api.openai.com/v1"
-    : "https://openrouter.ai/api/v1";
+import { executarAgente as executarAgenteRouter } from "../lib/aiRouter.js";
+
 const DEFAULT_SYSTEM_PROMPT =
   "Você é um assistente útil, direto e confiável. Responda com clareza e objetividade.";
 const DEFAULT_FAILSAFE_MESSAGE =
   "Desculpe, não consegui responder agora. Tente novamente em instantes.";
 const MAX_DEBUG_CHARS = 2000;
+const JSON_AGENTS = new Set([
+  "AGENTE_3_GERADOR_POSTS",
+  "AGENTE_4_OTIMIZADOR_PROMPT",
+  "AGENTE_5_VALIDADOR",
+  "AGENTE_6_GERADOR_TEXTO",
+  "AGENTE_7_GERADOR_POSTS_IMAGEM",
+  "AGENTE_LOGO_PROMPT_BUILDER",
+]);
 
 export const AGENTE_1_CONSULTOR_MARKETING = `Você é um Especialista de Marketing voltado para Pequenas e Médias Empresas Brasileiras. Seu foco principal é organizar o Marketing (criar um cronograma de postagens, sugerir campanhas de marketing para próximas datas comemorativas, montar uma estratégia de marketing eficaz e aprofundada, oferecer insights valiosos baseados em empresas do mesmo setor globalmente, sugerir melhores horários e formatos de postagem, oferecer insights com base na psicologia do consumo).
 
@@ -162,10 +168,6 @@ RESPONDA APENAS EM JSON VÁLIDO:
 
 Se aprovado = false, preencha motivo_rejeicao. Score de 0-100. Conteúdo de marketing legítimo deve sempre ser aprovado.`;
 
-function getApiKey() {
-  return process.env.AI_API_KEY || process.env.OPENAI_API_KEY || "";
-}
-
 function normalizeSystemPrompt(prompt) {
   const cleaned = (prompt ?? "").trim();
   if (!cleaned) {
@@ -207,156 +209,49 @@ function toDebugText(value, maxChars = MAX_DEBUG_CHARS) {
   return `${raw.substring(0, maxChars)}...`;
 }
 
-// 🔥 NOVO
-function fallbackResponse(systemPrompt, messages) {
-  const prompt = (systemPrompt || "").toLowerCase();
-  const lastUser =
-    [...(messages || [])].reverse().find((m) => m?.role === "user")?.content?.trim() ||
-    "contexto fornecido";
-  const isMarketing =
-    prompt.includes("marketing") ||
-    prompt.includes("campanha") ||
-    prompt.includes("cronograma") ||
-    prompt.includes("estratégia") ||
-    prompt.includes("estrategia");
-  const isSocial =
-    prompt.includes("redes sociais") ||
-    prompt.includes("social media") ||
-    prompt.includes("legendas") ||
-    prompt.includes("post") ||
-    prompt.includes("posts");
-
-  if (isSocial) {
-    return JSON.stringify(
-      {
-        posts: [
-          {
-            canal: "Instagram",
-            objetivo: "Engajar e gerar interesse",
-            tipo_conteudo: "Conteúdo educativo + prova social",
-            texto_pronto: `Com base no contexto: "${lastUser}".\nDica rápida: destaque um problema comum do seu público e mostre como sua solução resolve em 1 frase clara.\nInclua um exemplo real ou mini case para gerar confiança.`,
-            cta: "Comente 'quero' para receber um exemplo personalizado.",
-            sugestao_visual:
-              "Imagem clean com headline forte e 2 bullets curtos; incluir foto do produto/serviço em uso.",
-          },
-        ],
-      },
-      null,
-      2
-    );
-  }
-
-  if (isMarketing) {
-    return [
-      `Contexto: ${lastUser}`,
-      "",
-      "Plano prático de marketing (rápido e acionável):",
-      "1) Defina 1 objetivo claro (ex: gerar leads, aumentar visitas, conversão).",
-      "2) Crie 3 mensagens-chave que expliquem valor, diferencial e prova social.",
-      "3) Monte um mini cronograma de 7 dias com temas: dor do cliente, solução, prova, oferta, bastidores, FAQ, CTA.",
-      "4) Ajuste horários e formato conforme o canal principal do seu público.",
-      "5) Meça resultados simples (alcance, cliques, respostas) e repita o que funcionou.",
-    ].join("\n");
-  }
-
-  return [
-    `Com base no contexto: ${lastUser}`,
-    "",
-    "Aqui vai uma resposta útil para você seguir:",
-    "- Resuma o objetivo principal em 1 frase.",
-    "- Liste 2-3 pontos essenciais que não podem faltar.",
-    "- Defina o próximo passo mais simples para avançar.",
-    "- Se quiser, me diga o formato desejado (ex: lista, texto, JSON) e eu adapto.",
-  ].join("\n");
-}
-
-export async function callAgent(options) {
+export async function executarAgente(options) {
   const {
+    agente,
     systemPrompt,
     messages,
-    model = process.env.AI_MODEL_MARKETING || "gpt-4o",
-    stream = false,
-    responseFormat,
+    requireJson = false,
     maxTokens = 4096,
     temperature = 0.7,
     promptVars,
     debugTag = "callAgent",
     failSafeMessage = DEFAULT_FAILSAFE_MESSAGE,
+    preferHighQuality = false,
   } = options;
-
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error("AI_API_KEY não configurado no backend.");
-  }
 
   const interpolatedPrompt = interpolatePrompt(systemPrompt, promptVars);
   const finalPrompt = normalizeSystemPrompt(interpolatedPrompt);
   const normalizedMessages = normalizeMessages(messages);
-
-  const body = {
-    model,
-    messages: [{ role: "system", content: finalPrompt }, ...normalizedMessages],
-    max_tokens: maxTokens,
-    temperature,
-    stream,
-  };
-
-  if (responseFormat === "json_object") {
-    body.response_format = { type: "json_object" };
-  }
+  const effectiveRequireJson = requireJson || JSON_AGENTS.has(agente);
+  const finalFailSafeMessage =
+    effectiveRequireJson && failSafeMessage === DEFAULT_FAILSAFE_MESSAGE
+      ? "{}"
+      : failSafeMessage;
 
   console.log(`[AI] ${debugTag} prompt`, toDebugText(finalPrompt));
-  console.log(`[AI] ${debugTag} messages`, toDebugText(body.messages));
+  console.log(
+    `[AI] ${debugTag} messages`,
+    toDebugText([{ role: "system", content: finalPrompt }, ...normalizedMessages])
+  );
 
   try {
-    const response = await fetch(`${AI_API_BASE}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json; charset=UTF-8",
-        Authorization: `Bearer ${apiKey}`,
-        "HTTP-Referer": "https://infusion-ia.vercel.app",
-        "X-Title": "Infusion IA",
-      },
-      body: JSON.stringify(body),
+    const content = await executarAgenteRouter({
+      agente,
+      systemPrompt: finalPrompt,
+      messages: normalizedMessages,
+      requireJson: effectiveRequireJson,
+      maxTokens,
+      temperature,
+      preferHighQuality,
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-
-      console.error(
-        `[AI] ${debugTag} error`,
-        `AI API error ${response.status}: ${errorText}`
-      );
-
-      // 🔧 ALTERADO
-      if (response.status === 402 || response.status === 429) {
-        return fallbackResponse(finalPrompt, normalizedMessages);
-      }
-
-      if (response.status === 401) {
-        return "Erro de autenticação com a IA.";
-      }
-
-      if (stream) {
-        throw new Error(`AI API error ${response.status}: ${errorText}`);
-      }
-
-      return failSafeMessage;
-    } 
-
-    const data = await response.json().catch(() => null);
-    console.log(`[AI] ${debugTag} response`, toDebugText(data));
-    const content = data?.choices?.[0]?.message?.content;
-    if (typeof content !== "string" || !content.trim()) {
-      // 🔧 ALTERADO
-      console.warn(`[AI] ${debugTag} resposta vazia. Usando fallback.`);
-      return fallbackResponse(finalPrompt, normalizedMessages);
-    }
     return content;
   } catch (error) {
     console.error(`[AI] ${debugTag} exception`, error);
-    // 🔧 ALTERADO
-    return fallbackResponse(finalPrompt, normalizedMessages);
+    return finalFailSafeMessage;
   }
 }
 
@@ -368,8 +263,8 @@ export async function validateWithAgent(content) {
   }
 
   try {
-    model = process.env.AI_MODEL_MARKETING || "openai/gpt-4o-mini"
-    const result = await callAgent({
+    const result = await executarAgente({
+      agente: "AGENTE_5_VALIDADOR",
       systemPrompt: AGENTE_5_VALIDADOR,
       messages: [
         {
@@ -377,8 +272,7 @@ export async function validateWithAgent(content) {
           content: `Valide o seguinte conteúdo:\n\n${contentStr.substring(0, 2000)}`,
         },
       ],
-      model,
-      responseFormat: "json_object",
+      requireJson: true,
       maxTokens: 512,
       temperature: 0.1,
       debugTag: "validator",
@@ -455,3 +349,8 @@ export function safeParseJSON(text, fallback) {
     return fallback;
   }
 }
+
+
+
+
+

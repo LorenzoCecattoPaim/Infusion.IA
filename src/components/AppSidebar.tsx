@@ -27,6 +27,7 @@ import NavLink from "./NavLink";
 import { useState } from "react";
 import BuyCreditsDialog from "./BuyCreditsDialog";
 import favicon from "../../favicon.png";
+import { LOW_CREDITS_THRESHOLD } from "@/lib/credits";
 const NAV_ITEMS = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/chat", icon: MessageSquare, label: "Consultor de Marketing IA" },
@@ -88,7 +89,7 @@ export default function AppSidebar() {
             <button
               onClick={() => setBuyOpen(true)}
               className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
-                credits < 5
+                credits < LOW_CREDITS_THRESHOLD
                   ? "border-destructive/50 bg-destructive/10 text-destructive"
                   : "border-border hover:border-primary/50 text-muted-foreground hover:text-primary"
               }`}
