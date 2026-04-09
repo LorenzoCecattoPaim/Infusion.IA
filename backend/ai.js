@@ -207,6 +207,69 @@ function toDebugText(value, maxChars = MAX_DEBUG_CHARS) {
   return `${raw.substring(0, maxChars)}...`;
 }
 
+// 🔥 NOVO
+function fallbackResponse(systemPrompt, messages) {
+  const prompt = (systemPrompt || "").toLowerCase();
+  const lastUser =
+    [...(messages || [])].reverse().find((m) => m?.role === "user")?.content?.trim() ||
+    "contexto fornecido";
+  const isMarketing =
+    prompt.includes("marketing") ||
+    prompt.includes("campanha") ||
+    prompt.includes("cronograma") ||
+    prompt.includes("estratégia") ||
+    prompt.includes("estrategia");
+  const isSocial =
+    prompt.includes("redes sociais") ||
+    prompt.includes("social media") ||
+    prompt.includes("legendas") ||
+    prompt.includes("post") ||
+    prompt.includes("posts");
+
+  if (isSocial) {
+    return JSON.stringify(
+      {
+        posts: [
+          {
+            canal: "Instagram",
+            objetivo: "Engajar e gerar interesse",
+            tipo_conteudo: "Conteúdo educativo + prova social",
+            texto_pronto: `Com base no contexto: "${lastUser}".\nDica rápida: destaque um problema comum do seu público e mostre como sua solução resolve em 1 frase clara.\nInclua um exemplo real ou mini case para gerar confiança.`,
+            cta: "Comente 'quero' para receber um exemplo personalizado.",
+            sugestao_visual:
+              "Imagem clean com headline forte e 2 bullets curtos; incluir foto do produto/serviço em uso.",
+          },
+        ],
+      },
+      null,
+      2
+    );
+  }
+
+  if (isMarketing) {
+    return [
+      `Contexto: ${lastUser}`,
+      "",
+      "Plano prático de marketing (rápido e acionável):",
+      "1) Defina 1 objetivo claro (ex: gerar leads, aumentar visitas, conversão).",
+      "2) Crie 3 mensagens-chave que expliquem valor, diferencial e prova social.",
+      "3) Monte um mini cronograma de 7 dias com temas: dor do cliente, solução, prova, oferta, bastidores, FAQ, CTA.",
+      "4) Ajuste horários e formato conforme o canal principal do seu público.",
+      "5) Meça resultados simples (alcance, cliques, respostas) e repita o que funcionou.",
+    ].join("\n");
+  }
+
+  return [
+    `Com base no contexto: ${lastUser}`,
+    "",
+    "Aqui vai uma resposta útil para você seguir:",
+    "- Resuma o objetivo principal em 1 frase.",
+    "- Liste 2-3 pontos essenciais que não podem faltar.",
+    "- Defina o próximo passo mais simples para avançar.",
+    "- Se quiser, me diga o formato desejado (ex: lista, texto, JSON) e eu adapto.",
+  ].join("\n");
+}
+
 export async function callAgent(options) {
   const {
     systemPrompt,
@@ -265,8 +328,9 @@ export async function callAgent(options) {
         `AI API error ${response.status}: ${errorText}`
       );
 
-      if (response.status === 429) {
-        return "Limite de uso da IA atingido. Tente novamente em instantes.";
+      // 🔧 ALTERADO
+      if (response.status === 402 || response.status === 429) {
+        return fallbackResponse(finalPrompt, normalizedMessages);
       }
 
       if (response.status === 401) {
@@ -284,16 +348,15 @@ export async function callAgent(options) {
     console.log(`[AI] ${debugTag} response`, toDebugText(data));
     const content = data?.choices?.[0]?.message?.content;
     if (typeof content !== "string" || !content.trim()) {
+      // 🔧 ALTERADO
       console.warn(`[AI] ${debugTag} resposta vazia. Usando fallback.`);
-      return failSafeMessage;
+      return fallbackResponse(finalPrompt, normalizedMessages);
     }
     return content;
   } catch (error) {
     console.error(`[AI] ${debugTag} exception`, error);
-    if (stream) {
-      throw error;
-    }
-    return failSafeMessage;
+    // 🔧 ALTERADO
+    return fallbackResponse(finalPrompt, normalizedMessages);
   }
 }
 
