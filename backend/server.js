@@ -617,8 +617,8 @@ router.post("/generate-image", requireAuth, async (req, res) => {
 app.use("/api", router);
 app.use("/", router);
 
-app.use("/api", (req, res) => {
-  console.log("❌ Rota não encontrada:", req.method, req.originalUrl);
+app.use((req, res) => {
+  console.log("❌ 404:", req.method, req.originalUrl);
   res.status(404).json({ error: "Not found" });
 });
 
