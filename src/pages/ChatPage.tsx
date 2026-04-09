@@ -107,14 +107,14 @@ export default function ChatPage() {
   }, [user]);
 
   const fetchHistory = async () => {
-    const res = await fetchFunctions("/chat/conversations");
+    const res = await fetchFunctions("https://infusion-ia.onrender.com/api/chat/conversations");
     if (!res.ok) return;
     const data = await res.json();
     setConversations((data.conversations || []) as ConversationSummary[]);
   };
 
   const loadConversation = async (id: string) => {
-    const res = await fetchFunctions(`/chat/conversations/${id}/messages`);
+    const res = await fetchFunctions(`https://infusion-ia.onrender.com/api/chat/conversations/${id}/messages`);
     if (!res.ok) return;
     const data = await res.json();
 
@@ -137,7 +137,7 @@ export default function ChatPage() {
   const createConversation = async (firstMessage: string) => {
     if (!user) return null;
     const title = buildTitle(firstMessage);
-    const res = await fetchFunctions("/chat/conversations", {
+    const res = await fetchFunctions("https://infusion-ia.onrender.com/api/chat/conversations", {
       method: "POST",
       headers: { "Content-Type": "application/json; charset=UTF-8" },
       body: JSON.stringify({ title }),
@@ -152,7 +152,7 @@ export default function ChatPage() {
 
   const persistMessage = async (conversationId: string, role: "user" | "assistant", content: string) => {
     if (!user) return;
-    await fetchFunctions(`/chat/conversations/${conversationId}/messages`, {
+    await fetchFunctions(`https://infusion-ia.onrender.com/api/chat/conversations/${conversationId}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json; charset=UTF-8" },
       body: JSON.stringify({ role, content }),
