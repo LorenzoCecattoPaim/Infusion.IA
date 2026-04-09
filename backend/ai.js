@@ -1,4 +1,4 @@
-import { executarAgente as executarAgenteRouter } from "../lib/aiRouter.js";
+import { executarAgente as executarAgenteRouter } from "./lib/aiRouter.js";
 
 const DEFAULT_SYSTEM_PROMPT =
   "Você é um assistente útil, direto e confiável. Responda com clareza e objetividade.";
