@@ -12,7 +12,7 @@ import { buildRagContext } from "@/lib/rag";
 import { fetchFunctions } from "@/lib/apiBase";
 import { toast } from "sonner";
 import { CREDIT_COSTS } from "@/lib/credits";
-
+const API_URL = "https://infusion-ia.onrender.com/api";
 interface Message {
   id: string;
   role: "user" | "assistant";
