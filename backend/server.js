@@ -293,6 +293,36 @@ function sendInsufficientCredits(res, credits) {
   });
 }
 
+const CHAT_MESSAGES_TABLES = ["chat_messages", "chat_conversation_messages"];
+
+function isMissingTableError(error) {
+  const message = (error?.message || "").toLowerCase();
+  return (
+    message.includes("does not exist") ||
+    message.includes("not exist") ||
+    message.includes("schema cache") ||
+    message.includes("relation")
+  );
+}
+
+function isMissingColumnError(error) {
+  const message = (error?.message || "").toLowerCase();
+  return message.includes("column") && message.includes("does not exist");
+}
+
+async function withMessagesTable(handler) {
+  let lastError = null;
+  for (const table of CHAT_MESSAGES_TABLES) {
+    const { data, error } = await handler(table);
+    if (!error) return { data, table };
+    lastError = error;
+    if (!isMissingTableError(error)) {
+      return { error };
+    }
+  }
+  return { error: lastError };
+}
+
 /* ========================= ROUTES ========================= */
 
 const router = express.Router();
@@ -370,6 +400,122 @@ router.get("/chat/conversations", requireAuth, async (req, res) => {
   } catch (error) {
     console.error("[CHAT]", error);
     return sendError(res, 500, "Erro ao carregar conversas.");
+  }
+});
+
+router.post("/chat/conversations", requireAuth, async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { title } = req.body || {};
+    const payload = {
+      user_id: req.user.id,
+      title: typeof title === "string" && title.trim() ? title.trim() : null,
+    };
+
+    const { data, error } = await supabase
+      .from("chat_conversations")
+      .insert(payload)
+      .select("id")
+      .single();
+
+    if (error) throw error;
+
+    return res.status(201).json({ id: data.id });
+  } catch (error) {
+    console.error("[CHAT] create conversation", error);
+    return sendError(res, 500, "Erro ao criar conversa.");
+  }
+});
+
+router.get("/chat/conversations/:id/messages", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const supabase = getSupabase();
+
+    const { data: convo, error: convoError } = await supabase
+      .from("chat_conversations")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", req.user.id)
+      .maybeSingle();
+
+    if (convoError) throw convoError;
+    if (!convo) return sendError(res, 404, "Conversa não encontrada.");
+
+    const result = await withMessagesTable((table) =>
+      supabase
+        .from(table)
+        .select("id, role, content, created_at")
+        .eq("conversation_id", id)
+        .order("created_at", { ascending: true })
+    );
+
+    if (result.error) throw result.error;
+
+    return sendSuccess(res, { messages: result.data || [] });
+  } catch (error) {
+    console.error("[CHAT] list messages", error);
+    return sendError(res, 500, "Erro ao carregar mensagens.");
+  }
+});
+
+router.post("/chat/conversations/:id/messages", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role, content } = req.body || {};
+
+    if (role !== "user" && role !== "assistant") {
+      return sendError(res, 400, "role inválido");
+    }
+    if (!content || typeof content !== "string") {
+      return sendError(res, 400, "content inválido");
+    }
+
+    const supabase = getSupabase();
+    const { data: convo, error: convoError } = await supabase
+      .from("chat_conversations")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", req.user.id)
+      .maybeSingle();
+
+    if (convoError) throw convoError;
+    if (!convo) return sendError(res, 404, "Conversa não encontrada.");
+
+    const insertWithUser = (table) =>
+      supabase
+        .from(table)
+        .insert({
+          conversation_id: id,
+          role,
+          content,
+          user_id: req.user.id,
+        })
+        .select("id")
+        .single();
+
+    const insertWithoutUser = (table) =>
+      supabase
+        .from(table)
+        .insert({
+          conversation_id: id,
+          role,
+          content,
+        })
+        .select("id")
+        .single();
+
+    let result = await withMessagesTable(insertWithUser);
+    if (result.error && isMissingColumnError(result.error)) {
+      result = await withMessagesTable(insertWithoutUser);
+    }
+
+    if (result.error) throw result.error;
+
+    return res.status(201).json({ id: result.data?.id || null });
+  } catch (error) {
+    console.error("[CHAT] add message", error);
+    return sendError(res, 500, "Erro ao salvar mensagem.");
   }
 });
 
