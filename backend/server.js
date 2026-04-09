@@ -295,15 +295,17 @@ function sendInsufficientCredits(res, credits) {
 
 /* ========================= ROUTES ========================= */
 
-app.get("/health", (_req, res) => {
+const router = express.Router();
+
+router.get("/health", (_req, res) => {
   sendSuccess(res, { ok: true });
 });
 
-app.get("/cors-test", (_req, res) => {
+router.get("/cors-test", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/plans", (_req, res) => {
+router.get("/plans", (_req, res) => {
   sendSuccess(res, {
     monthly: PLAN_CATALOG.monthly,
     annual: PLAN_CATALOG.annual,
@@ -313,7 +315,7 @@ app.get("/plans", (_req, res) => {
 
 /* -------- CREDITS -------- */
 
-app.get("/credits", requireAuth, async (req, res) => {
+router.get("/credits", requireAuth, async (req, res) => {
   try {
     const supabase = getSupabase();
     const data = await ensureCreditsRow(supabase, req.user.id);
@@ -326,7 +328,7 @@ app.get("/credits", requireAuth, async (req, res) => {
 
 /* -------- DASHBOARD -------- */
 
-app.get("/dashboard-stats", requireAuth, async (req, res) => {
+router.get("/dashboard-stats", requireAuth, async (req, res) => {
   try {
     const supabase = getSupabase();
 
@@ -351,7 +353,7 @@ app.get("/dashboard-stats", requireAuth, async (req, res) => {
 
 /* -------- CHAT -------- */
 
-app.get("/chat/conversations", requireAuth, async (req, res) => {
+router.get("/chat/conversations", requireAuth, async (req, res) => {
   try {
     const supabase = getSupabase();
 
@@ -373,7 +375,7 @@ app.get("/chat/conversations", requireAuth, async (req, res) => {
 
 /* -------- AI CHAT -------- */
 
-app.post("/ai-chat", requireAuth, async (req, res) => {
+router.post("/ai-chat", requireAuth, async (req, res) => {
   try {
     const { messages = [] } = req.body || {};
 
@@ -411,7 +413,7 @@ app.post("/ai-chat", requireAuth, async (req, res) => {
 
 /* -------- GENERATE TEXT -------- */
 
-app.post("/generate-text", requireAuth, async (req, res) => {
+router.post("/generate-text", requireAuth, async (req, res) => {
   try {
     const {
       tipo_conteudo,
@@ -482,7 +484,7 @@ app.post("/generate-text", requireAuth, async (req, res) => {
 
 /* -------- GENERATE POSTS -------- */
 
-app.post("/generate-posts", requireAuth, async (req, res) => {
+router.post("/generate-posts", requireAuth, async (req, res) => {
   try {
     const { objetivo, tipo_conteudo, canal, brief, channels } = req.body || {};
 
@@ -533,7 +535,7 @@ app.post("/generate-posts", requireAuth, async (req, res) => {
 
 /* -------- GENERATE POST PROMPT -------- */
 
-app.post("/generate-post-prompt", requireAuth, async (req, res) => {
+router.post("/generate-post-prompt", requireAuth, async (req, res) => {
   try {
     const {
       tipo_post,
@@ -585,7 +587,7 @@ app.post("/generate-post-prompt", requireAuth, async (req, res) => {
 
 /* -------- GENERATE IMAGE -------- */
 
-app.post("/generate-image", requireAuth, async (req, res) => {
+router.post("/generate-image", requireAuth, async (req, res) => {
   try {
     const { prompt } = req.body || {};
     if (!prompt) return sendError(res, 400, "prompt required");
@@ -610,6 +612,14 @@ app.post("/generate-image", requireAuth, async (req, res) => {
     console.error("[IMAGE]", error);
     return sendError(res, 500, "Erro ao gerar imagem");
   }
+});
+
+app.use("/api", router);
+app.use("/", router);
+
+app.use("/api", (req, res) => {
+  console.log("❌ Rota não encontrada:", req.method, req.originalUrl);
+  res.status(404).json({ error: "Not found" });
 });
 
 /* -------- ERROR HANDLER -------- */
@@ -642,4 +652,3 @@ app.listen(port, () => {
     console.error(" Falha ao sincronizar planos:", err);
   }
 })();
-
