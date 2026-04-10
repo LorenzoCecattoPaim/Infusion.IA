@@ -177,13 +177,16 @@ async function callModel({
     input,
     temperature,
     max_output_tokens: maxTokens,
-    ...(requireJson && {
-      text: {
-        format: {
-          type: "json_object"
+    ...(requireJson
+      ? {
+          text: {
+            format: {
+              type: "json_object"
+            }
+          }
         }
-      }
-    }),
+      : {}),
+  });
 
   // 🔥 EXTRAÇÃO CORRETA
   let content = "";
