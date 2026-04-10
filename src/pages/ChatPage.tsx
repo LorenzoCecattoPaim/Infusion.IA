@@ -242,6 +242,7 @@ export default function ChatPage() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
@@ -250,11 +251,14 @@ export default function ChatPage() {
           if (line.startsWith("data: ")) {
             const data = line.slice(6).trim();
             if (data === "[DONE]") break;
+
             try {
               const parsed = JSON.parse(data);
               const chunk = parsed.choices?.[0]?.delta?.content || "";
+
               if (chunk) {
                 finalContent += chunk;
+
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantMsgId
@@ -264,16 +268,18 @@ export default function ChatPage() {
                 );
               }
             } catch {
-              // ignore parse errors in stream
+              // ignore
             }
           }
         }
       }
 
-        if (conversationId && finalContent.trim()) {
-          await persistMessage(conversationId, "assistant", finalContent);
-        }
-        await fetchHistory();
+      // ✅ AGORA FORA DO WHILE, MAS DENTRO DO TRY
+      if (conversationId && finalContent.trim()) {
+        await persistMessage(conversationId, "assistant", finalContent);
+      }
+
+      await fetchHistory();
       }
     } catch (err) {
       console.error("[AI] Chat error", err);
