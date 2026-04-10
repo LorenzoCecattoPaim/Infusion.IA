@@ -209,9 +209,19 @@ async function syncPlanCatalog() {
 }
 
 function getBearerToken(req) {
-  const authHeader = req.headers.authorization || req.headers.Authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
-  return authHeader.slice("Bearer ".length).trim();
+  const raw =
+    req.headers.authorization ||
+    req.headers.Authorization ||
+    req.headers["authorization"];
+
+  if (!raw) return null;
+
+  const header = Array.isArray(raw) ? raw.join(" ") : String(raw);
+  const match = header.match(/^\s*Bearer\s+(.+)\s*$/i);
+  if (!match) return null;
+
+  const token = match[1].trim();
+  return token || null;
 }
 
 function isUuid(value) {
@@ -255,16 +265,25 @@ function logChatDebug(label, req) {
 }
 
 async function requireAuth(req, res, next) {
-  const token = getBearerToken(req);
-  if (!token) return sendError(res, 401, "Unauthorized");
+  try {
+    const token = getBearerToken(req);
+    if (!token) {
+      return sendError(res, 401, "Token ausente.");
+    }
 
-  const supabase = getSupabase();
-  const { data: { user }, error } = await supabase.auth.getUser(token);
+    const supabase = getSupabase();
+    const { data: { user }, error } = await supabase.auth.getUser(token);
 
-  if (error || !user) return sendError(res, 401, "Unauthorized");
+    if (error || !user) {
+      return sendError(res, 401, "Token inválido ou expirado.");
+    }
 
-  req.user = user;
-  next();
+    req.user = user;
+    return next();
+  } catch (err) {
+    console.error("[AUTH]", err);
+    return sendError(res, 401, "Falha na autenticação.");
+  }
 }
 
 async function ensureCreditsRow(supabase, userId) {
