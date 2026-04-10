@@ -238,6 +238,8 @@ function logChatDebug(label, req) {
 
   const body = req.body || {};
   const safeBody = {
+    contentType: req.headers["content-type"] || null,
+    bodyType: typeof req.body,
     keys: Object.keys(body),
     contentLength:
       typeof body.content === "string"
@@ -535,11 +537,30 @@ router.post("/chat/conversations/:id/messages", requireAuth, async (req, res) =>
     const { id } = req.params;
     logChatDebug("POST messages", req);
 
+    if (!req.user) {
+      logChatDebug("POST messages missing user", req);
+      return sendError(res, 401, "Usuário não autenticado.");
+    }
+
     if (!isUuid(id)) {
       return sendError(res, 400, "conversation_id inválido");
     }
 
-    const body = req.body || {};
+    let body = req.body;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        logChatDebug("POST messages invalid json", req);
+        return sendError(res, 400, "payload inválido");
+      }
+    }
+
+    if (!body || typeof body !== "object") {
+      logChatDebug("POST messages missing body", req);
+      return sendError(res, 400, "payload inválido");
+    }
+
     const content =
       typeof body.content === "string"
         ? body.content
