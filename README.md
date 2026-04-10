@@ -13,7 +13,7 @@ Hub de marketing com Inteligência Artificial para pequenas e médias empresas b
 ## Setup Local
 
 ### 1. Pré-requisitos
-- Node.js 18+
+- Node.js 20+
 - Conta no Supabase, OpenAI e Leonardo AI
 
 ### 2. Instalação
@@ -24,6 +24,9 @@ npm install
 cp .env.example .env
 # Preencha .env com suas chaves
 ```
+
+### 2.1. Banco (Supabase)
+Execute o script `backend/sql/plans.sql` no SQL Editor do Supabase para criar a tabela `plans`.
 
 ### 3. Rodar localmente
 ```bash

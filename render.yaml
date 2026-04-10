@@ -7,6 +7,8 @@
     buildCommand: npm install
     startCommand: npm start
     envVars:
+      - key: NODE_VERSION
+        value: 20
       - key: SUPABASE_URL
         sync: false
       - key: SERVICE_ROLE_KEY

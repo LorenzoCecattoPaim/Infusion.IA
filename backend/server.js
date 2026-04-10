@@ -32,7 +32,7 @@ function isAllowedOrigin(origin) {
   if (ALLOWED_ORIGINS.includes(origin)) return true;
 
   // permite previews da Vercel
-  if (origin.endsWith(".vercel.app") && origin.includes("infusion-ia")) {
+  if (origin.endsWith(".vercel.app")) {
     return true;
   }
 
@@ -55,25 +55,6 @@ app.use((req, res, next) => {
 
   if (req.method === "OPTIONS") {
     return res.sendStatus(204);
-  }
-
-  next();
-});
-
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-
-  // libera qualquer origem da Vercel temporariamente (debug)
-  if (origin && origin.includes("vercel.app")) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
-
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "*");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
   }
 
   next();
@@ -199,6 +180,10 @@ async function syncPlanCatalog() {
       onConflict: "id",
     });
     if (error) {
+      if (isMissingTableError(error)) {
+        console.warn("[PLANS] tabela plans inexistente. Crie a tabela para sincronizar.");
+        return;
+      }
       console.warn("[PLANS] falha ao sincronizar catálogo", error.message);
     } else {
       console.log("[PLANS] catálogo sincronizado");
@@ -264,6 +249,29 @@ function logChatDebug(label, req) {
     body: safeBody,
     user: safeUser,
   });
+}
+
+function normalizeChatMessages(messages, lastMessageOverride) {
+  const raw = Array.isArray(messages) ? messages : [];
+  const normalized = raw
+    .map((m) => ({
+      role: m?.role,
+      content: typeof m?.content === "string" ? m.content : null,
+    }))
+    .filter((m) => (m.role === "user" || m.role === "assistant") && m.content);
+
+  if (typeof lastMessageOverride === "string" && lastMessageOverride.trim()) {
+    const override = lastMessageOverride.trim();
+    for (let i = normalized.length - 1; i >= 0; i -= 1) {
+      if (normalized[i].role === "user") {
+        normalized[i] = { ...normalized[i], content: override };
+        return normalized;
+      }
+    }
+    normalized.push({ role: "user", content: override });
+  }
+
+  return normalized;
 }
 
 async function requireAuth(req, res, next) {
@@ -371,6 +379,24 @@ function isMissingColumnError(error) {
   return message.includes("column") && message.includes("does not exist");
 }
 
+function buildPlaceholderImage(label = "Imagem") {
+  const safeLabel = String(label || "Imagem").slice(0, 40);
+  const svg = [
+    "<svg xmlns='http://www.w3.org/2000/svg' width='1024' height='1024'>",
+    "<defs>",
+    "<linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>",
+    "<stop offset='0%' stop-color='#f2f2f2'/>",
+    "<stop offset='100%' stop-color='#d9d9d9'/>",
+    "</linearGradient>",
+    "</defs>",
+    "<rect width='1024' height='1024' fill='url(#g)'/>",
+    "<rect x='40' y='40' width='944' height='944' rx='48' fill='white' stroke='#cccccc'/>",
+    `<text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='48' font-family='Arial' fill='#444'>${safeLabel}</text>`,
+    "</svg>",
+  ].join("");
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 async function withMessagesTable(handler) {
   let lastError = null;
   for (const table of CHAT_MESSAGES_TABLES) {
@@ -405,6 +431,29 @@ router.get("/plans", (_req, res) => {
 });
 
 /* -------- PROFILE -------- */
+
+router.get("/profile", requireAuth, async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("business_profiles")
+      .select("*")
+      .eq("user_id", req.user.id)
+      .maybeSingle();
+
+    if (error) {
+      if (isMissingTableError(error)) {
+        return sendSuccess(res, { profile: null });
+      }
+      throw error;
+    }
+
+    return sendSuccess(res, { profile: data ?? null });
+  } catch (error) {
+    console.error("[PROFILE GET]", error);
+    return sendError(res, 500, "Erro ao carregar perfil.");
+  }
+});
 
 router.put("/profile", requireAuth, async (req, res) => {
   try {
@@ -466,6 +515,32 @@ router.get("/dashboard-stats", requireAuth, async (req, res) => {
   } catch (error) {
     console.error("[DASHBOARD]", error);
     return sendError(res, 500, "Erro ao carregar resumo.");
+  }
+});
+
+/* -------- GENERATED IMAGES -------- */
+
+router.get("/generated-images", requireAuth, async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("generated_images")
+      .select("id, url, prompt, optimized_prompt, negative_prompt, quality, created_at")
+      .eq("user_id", req.user.id)
+      .order("created_at", { ascending: false })
+      .limit(24);
+
+    if (error) {
+      if (isMissingTableError(error)) {
+        return sendSuccess(res, { images: [] });
+      }
+      throw error;
+    }
+
+    return sendSuccess(res, { images: data || [] });
+  } catch (error) {
+    console.error("[GENERATED-IMAGES]", error);
+    return sendError(res, 500, "Erro ao carregar imagens.");
   }
 });
 
@@ -662,9 +737,31 @@ router.post("/chat/conversations/:id/messages", requireAuth, async (req, res) =>
 
 router.post("/ai-chat", requireAuth, async (req, res) => {
   try {
-    const { messages = [] } = req.body || {};
+    let body = req.body || {};
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
 
-    if (!messages.length) {
+    const { messages, stream, lastMessageOverride } = body || {};
+    let normalizedMessages = normalizeChatMessages(messages, lastMessageOverride);
+
+    if (!normalizedMessages.length) {
+      const fallbackContent =
+        typeof body?.message === "string"
+          ? body.message
+          : typeof body?.content === "string"
+            ? body.content
+            : null;
+      if (fallbackContent) {
+        normalizedMessages = [{ role: "user", content: fallbackContent.trim() }];
+      }
+    }
+
+    if (!normalizedMessages.length) {
       return sendError(res, 400, "messages required");
     }
 
@@ -680,11 +777,47 @@ router.post("/ai-chat", requireAuth, async (req, res) => {
       return sendInsufficientCredits(res, creditResult.credits);
     }
 
+    let profile = null;
+    try {
+      const { data } = await supabase
+        .from("business_profiles")
+        .select("*")
+        .eq("user_id", req.user.id)
+        .maybeSingle();
+      profile = data || null;
+    } catch (error) {
+      console.warn("[AI-CHAT] perfil indisponivel", error?.message || error);
+    }
+
+    const systemPrompt = renderBusinessPrompt(
+      AGENTE_1_CONSULTOR_MARKETING,
+      profile,
+      null
+    );
+
     const text = await executarAgente({
       agente: "AGENTE_1_CONSULTOR_MARKETING",
-      systemPrompt: AGENTE_1_CONSULTOR_MARKETING,
-      messages,
+      systemPrompt,
+      messages: normalizedMessages,
     });
+
+    if (stream) {
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.flushHeaders?.();
+
+      const chunks = text.match(/.{1,120}/g) || [""];
+      for (const chunk of chunks) {
+        const payload = {
+          choices: [{ delta: { content: chunk } }],
+        };
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+      }
+      res.write("data: [DONE]\n\n");
+      return res.end();
+    }
 
     return sendSuccess(res, {
       choices: [{ message: { role: "assistant", content: text } }],
@@ -693,6 +826,104 @@ router.post("/ai-chat", requireAuth, async (req, res) => {
   } catch (error) {
     console.error("[AI-CHAT]", error);
     return sendError(res, 500, "Erro interno");
+  }
+});
+
+/* -------- LOGO GENERATOR -------- */
+
+router.post("/logo-generator", requireAuth, async (req, res) => {
+  try {
+    let body = req.body || {};
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+
+    const { messages, action, selectedPrompt } = body || {};
+    let normalizedMessages = normalizeChatMessages(messages);
+
+    if (!normalizedMessages.length) {
+      return sendError(res, 400, "messages required");
+    }
+
+    if (selectedPrompt && typeof selectedPrompt === "string") {
+      normalizedMessages = [
+        ...normalizedMessages,
+        {
+          role: "user",
+          content: `Crie variações com base neste prompt: ${selectedPrompt}`,
+        },
+      ];
+    }
+
+    const supabase = getSupabase();
+    const creditResult = await consumeCredits({
+      supabase,
+      userId: req.user.id,
+      amount: CREDIT_COSTS.image,
+      reason: `logo-${action || "generator"}`,
+    });
+
+    if (!creditResult.ok) {
+      return sendInsufficientCredits(res, creditResult.credits);
+    }
+
+    const assistantMessage = await executarAgente({
+      agente: "AGENTE_2_DESIGNER_LOGO",
+      systemPrompt: AGENTE_2_DESIGNER_LOGO,
+      messages: normalizedMessages,
+      maxTokens: 1200,
+      temperature: 0.7,
+      debugTag: "logo-generator",
+    });
+
+    const promptResponse = await executarAgente({
+      agente: "AGENTE_LOGO_PROMPT_BUILDER",
+      systemPrompt: AGENTE_LOGO_PROMPT_BUILDER,
+      messages: normalizedMessages,
+      requireJson: true,
+      maxTokens: 1200,
+      temperature: 0.6,
+      debugTag: "logo-prompts",
+    });
+
+    const parsed = safeParseJSON(promptResponse, null);
+    const prompts = Array.isArray(parsed?.prompts) ? parsed.prompts : [];
+    const descriptions = Array.isArray(parsed?.descriptions) ? parsed.descriptions : [];
+    const logos = prompts.slice(0, 3).map((prompt, index) => ({
+      url: buildPlaceholderImage(`Logo ${index + 1}`),
+      description: descriptions[index] || "",
+      prompt,
+    }));
+
+    if (logos.length) {
+      try {
+        const insertPayload = logos.map((logo) => ({
+          user_id: req.user.id,
+          url: logo.url,
+          prompt: logo.prompt,
+          description: logo.description,
+        }));
+        const { error } = await supabase.from("generated_logos").insert(insertPayload);
+        if (error && !isMissingTableError(error) && !isMissingColumnError(error)) {
+          console.warn("[LOGO] falha ao salvar", error.message);
+        }
+      } catch (error) {
+        console.warn("[LOGO] persistencia ignorada", error?.message || error);
+      }
+    }
+
+    return res.json({
+      message: assistantMessage,
+      logos,
+      credits: creditResult.credits,
+    });
+  } catch (error) {
+    console.error("[LOGO]", error);
+    return sendError(res, 500, "Erro ao gerar logo.");
   }
 });
 
@@ -889,8 +1120,26 @@ router.post("/generate-image", requireAuth, async (req, res) => {
       return sendInsufficientCredits(res, creditResult.credits);
     }
 
+    const imageUrl = buildPlaceholderImage("Imagem IA");
+
+    try {
+      const { error } = await supabase.from("generated_images").insert({
+        user_id: req.user.id,
+        url: imageUrl,
+        prompt,
+        optimized_prompt: null,
+        negative_prompt: null,
+        quality: "standard",
+      });
+      if (error && !isMissingTableError(error) && !isMissingColumnError(error)) {
+        console.warn("[IMAGE] falha ao salvar", error.message);
+      }
+    } catch (error) {
+      console.warn("[IMAGE] persistencia ignorada", error?.message || error);
+    }
+
     return sendSuccess(res, {
-      images: [{ url: "placeholder" }],
+      images: [{ url: imageUrl }],
       credits: creditResult.credits,
     });
   } catch (error) {
@@ -900,7 +1149,32 @@ router.post("/generate-image", requireAuth, async (req, res) => {
 });
 
 app.use("/api", router);
-app.use("/", router);
+
+const LEGACY_ROUTE_PREFIXES = [
+  "/health",
+  "/cors-test",
+  "/plans",
+  "/profile",
+  "/credits",
+  "/dashboard-stats",
+  "/generated-images",
+  "/chat",
+  "/ai-chat",
+  "/generate-text",
+  "/generate-posts",
+  "/generate-post-prompt",
+  "/generate-image",
+  "/logo-generator",
+];
+
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api")) return next();
+  const shouldRedirect = LEGACY_ROUTE_PREFIXES.some(
+    (prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`)
+  );
+  if (!shouldRedirect) return next();
+  return res.redirect(307, `/api${req.path}`);
+});
 
 app.use((req, res) => {
   console.log("❌ 404:", req.method, req.originalUrl);

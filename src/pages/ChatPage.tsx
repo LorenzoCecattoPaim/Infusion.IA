@@ -12,7 +12,6 @@ import { buildRagContext } from "@/lib/rag";
 import { fetchFunctions } from "@/lib/apiBase";
 import { toast } from "sonner";
 import { CREDIT_COSTS } from "@/lib/credits";
-const API_URL = "https://infusion-ia.onrender.com/api";
 interface Message {
   id: string;
   role: "user" | "assistant";
@@ -167,6 +166,10 @@ export default function ChatPage() {
   const handleSend = async (text?: string) => {
     const userMessage = text ? text.trim() : input.trim();
     if (!userMessage || isLoading) return;
+    if (!user) {
+      toast.error("Faça login para usar o chat.");
+      return;
+    }
     if (credits < textCost) {
       toast.error(
         `Créditos insuficientes. Necessário: ${textCost}, disponível: ${credits}`
