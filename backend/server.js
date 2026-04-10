@@ -214,6 +214,46 @@ function getBearerToken(req) {
   return authHeader.slice("Bearer ".length).trim();
 }
 
+function isUuid(value) {
+  if (typeof value !== "string") return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
+}
+
+function logChatDebug(label, req) {
+  if (process.env.NODE_ENV === "production" && !process.env.DEBUG_CHAT_LOGS) {
+    return;
+  }
+
+  const body = req.body || {};
+  const safeBody = {
+    keys: Object.keys(body),
+    contentLength:
+      typeof body.content === "string"
+        ? body.content.length
+        : typeof body.message === "string"
+          ? body.message.length
+          : typeof body.text === "string"
+            ? body.text.length
+            : null,
+    role: body.role || body.sender || null,
+  };
+
+  const safeUser = req.user
+    ? {
+        id: req.user.id,
+        email: req.user.email ? "[redacted]" : null,
+      }
+    : null;
+
+  console.log(`[CHAT-DEBUG] ${label}`, {
+    params: req.params,
+    body: safeBody,
+    user: safeUser,
+  });
+}
+
 async function requireAuth(req, res, next) {
   const token = getBearerToken(req);
   if (!token) return sendError(res, 401, "Unauthorized");
@@ -430,6 +470,12 @@ router.post("/chat/conversations", requireAuth, async (req, res) => {
 router.get("/chat/conversations/:id/messages", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    logChatDebug("GET messages", req);
+
+    if (!isUuid(id)) {
+      return sendError(res, 400, "conversation_id inválido");
+    }
+
     const supabase = getSupabase();
 
     const { data: convo, error: convoError } = await supabase
@@ -450,7 +496,13 @@ router.get("/chat/conversations/:id/messages", requireAuth, async (req, res) => 
         .order("created_at", { ascending: true })
     );
 
-    if (result.error) throw result.error;
+    if (result.error) {
+      if (isMissingTableError(result.error)) {
+        console.warn("[CHAT] tabela de mensagens não encontrada");
+        return sendSuccess(res, { messages: [] });
+      }
+      throw result.error;
+    }
 
     return sendSuccess(res, { messages: result.data || [] });
   } catch (error) {
@@ -462,9 +514,24 @@ router.get("/chat/conversations/:id/messages", requireAuth, async (req, res) => 
 router.post("/chat/conversations/:id/messages", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { role, content } = req.body || {};
+    logChatDebug("POST messages", req);
 
-    if (role !== "user" && role !== "assistant") {
+    if (!isUuid(id)) {
+      return sendError(res, 400, "conversation_id inválido");
+    }
+
+    const body = req.body || {};
+    const content =
+      typeof body.content === "string"
+        ? body.content
+        : typeof body.message === "string"
+          ? body.message
+          : typeof body.text === "string"
+            ? body.text
+            : null;
+    const role = body.role || body.sender || (content ? "user" : null);
+
+    if (role !== "user" && role !== "assistant" && role !== "system") {
       return sendError(res, 400, "role inválido");
     }
     if (!content || typeof content !== "string") {
@@ -510,7 +577,12 @@ router.post("/chat/conversations/:id/messages", requireAuth, async (req, res) =>
       result = await withMessagesTable(insertWithoutUser);
     }
 
-    if (result.error) throw result.error;
+    if (result.error) {
+      if (isMissingTableError(result.error)) {
+        return sendError(res, 503, "Mensagens indisponíveis no momento.");
+      }
+      throw result.error;
+    }
 
     return res.status(201).json({ id: result.data?.id || null });
   } catch (error) {
