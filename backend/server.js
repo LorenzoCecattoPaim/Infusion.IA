@@ -985,11 +985,15 @@ router.post("/generate-text", requireAuth, async (req, res) => {
       debugTag: "generate-text",
     });
 
-    const parsed = safeParseJSON(text, {
-      texto: "",
-      sugestoes: [],
-      prompt: null,
-    });
+    let parsed = safeParseJSON(text, null);
+
+    if (!parsed || typeof parsed !== "object") {
+      parsed = {
+        texto: typeof text === "string" ? text : "",
+        sugestoes: [],
+        prompt: null,
+      };
+    }
 
     return sendSuccess(res, { ...parsed, credits: creditResult.credits });
   } catch (error) {
@@ -1211,3 +1215,4 @@ app.listen(port, () => {
     console.error(" Falha ao sincronizar planos:", err);
   }
 })();
+console.log("[AI RAW RESPONSE]", text);

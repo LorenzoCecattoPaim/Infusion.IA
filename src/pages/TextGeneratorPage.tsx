@@ -65,10 +65,14 @@ export default function TextGeneratorPage() {
         tom_voz: tom || undefined,
         variation: opts?.variation ?? false,
         refine_notes: opts?.refine ? refineNotes : undefined,
-        previous_text: opts?.refine ? result?.texto : undefined,
+        previous_text: opts?.refine && result?.texto ? result.texto : undefined,
       });
 
-      setResult(data);
+      setResult({
+        texto: data?.texto || "",
+        sugestoes: data?.sugestoes || [],
+        prompt: data?.prompt || null,
+      });
       setHistory((prev) => [
         {
           ...data,
