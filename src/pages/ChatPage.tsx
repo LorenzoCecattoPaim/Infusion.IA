@@ -150,14 +150,15 @@ export default function ChatPage() {
     return data?.id || null;
   };
 
-  const persistMessage = async (conversationId, role, content) => {
-    const token = await getAccessTokenSomehow(); // 👈 depende do seu auth
-
+  const persistMessage = async (
+    conversationId: string,
+    role: "user" | "assistant",
+    content: string
+  ) => {
     await fetchFunctions(`/chat/conversations/${conversationId}/messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`, // 🔥 ESSENCIAL
       },
       body: JSON.stringify({ role, content }),
     });
