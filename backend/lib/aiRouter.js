@@ -178,19 +178,23 @@ async function callModel({
     temperature,
     max_output_tokens: maxTokens,
     ...(requireJson && {
-      response_format: { type: "json_object" },
+      text: {
+        format: {
+          type: "json_object"
+        }
+      }
     }),
-  });
 
   // 🔥 EXTRAÇÃO CORRETA
   let content = "";
 
   if (response.output_text) {
     content = response.output_text;
-  } else {
-    content =
-      response?.output?.[0]?.content?.[0]?.text ||
-      "";
+  } else if (Array.isArray(response.output)) {
+    content = response.output
+      .flatMap(o => o.content || [])
+      .map(c => c.text || "")
+      .join("");
   }
 
   return {
