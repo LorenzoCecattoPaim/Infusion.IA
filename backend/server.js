@@ -404,6 +404,33 @@ router.get("/plans", (_req, res) => {
   });
 });
 
+/* -------- PROFILE -------- */
+
+router.put("/profile", requireAuth, async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const updates = req.body || {};
+
+    const { data, error } = await supabase
+      .from("business_profiles")
+      .upsert(
+        {
+          user_id: req.user.id,
+          ...updates,
+        },
+        { onConflict: "user_id" }
+      )
+      .select("*")
+      .single();
+
+    if (error) throw error;
+
+    return sendSuccess(res, { profile: data });
+  } catch (error) {
+    console.error("[PROFILE PUT]", error);
+    return sendError(res, 500, "Erro ao salvar perfil.");
+  }
+});
 /* -------- CREDITS -------- */
 
 router.get("/credits", requireAuth, async (req, res) => {
