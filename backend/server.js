@@ -1109,12 +1109,20 @@ router.post("/generate-post-prompt", requireAuth, async (req, res) => {
 
 /* -------- GENERATE IMAGE -------- */
 
+import OpenAI from "openai";
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
 router.post("/generate-image", requireAuth, async (req, res) => {
   try {
     const { prompt } = req.body || {};
     if (!prompt) return sendError(res, 400, "prompt required");
 
     const supabase = getSupabase();
+
+    // 💳 Consumo de créditos
     const creditResult = await consumeCredits({
       supabase,
       userId: req.user.id,
@@ -1126,8 +1134,51 @@ router.post("/generate-image", requireAuth, async (req, res) => {
       return sendInsufficientCredits(res, creditResult.credits);
     }
 
-    const imageUrl = buildPlaceholderImage("Imagem IA");
+    console.log("[IMAGE] Gerando imagem com prompt:", prompt);
 
+    // 🎨 Gerar imagem
+    const result = await openai.images.generate({
+      model: "gpt-image-1",
+      prompt,
+      size: "1024x1024",
+    });
+
+    console.log("[IMAGE RAW RESPONSE]", JSON.stringify(result, null, 2));
+
+    const imageBase64 = result.data?.[0]?.b64_json;
+
+    if (!imageBase64) {
+      throw new Error("Imagem não retornada pela IA");
+    }
+
+    // 🔄 Converter base64 → buffer
+    const buffer = Buffer.from(imageBase64, "base64");
+
+    // 🧠 Nome único do arquivo
+    const fileName = `${req.user.id}/${Date.now()}.png`;
+
+    // ☁️ Upload no Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from("generated-images")
+      .upload(fileName, buffer, {
+        contentType: "image/png",
+      });
+
+    if (uploadError) {
+      console.error("[IMAGE UPLOAD ERROR]", uploadError);
+      throw uploadError;
+    }
+
+    // 🌐 URL pública
+    const { data: publicUrlData } = supabase.storage
+      .from("generated-images")
+      .getPublicUrl(fileName);
+
+    const imageUrl = publicUrlData.publicUrl;
+
+    console.log("[IMAGE URL]", imageUrl);
+
+    // 💾 Salvar no banco
     try {
       const { error } = await supabase.from("generated_images").insert({
         user_id: req.user.id,
@@ -1137,22 +1188,31 @@ router.post("/generate-image", requireAuth, async (req, res) => {
         negative_prompt: null,
         quality: "standard",
       });
-      if (error && !isMissingTableError(error) && !isMissingColumnError(error)) {
+
+      if (
+        error &&
+        !isMissingTableError(error) &&
+        !isMissingColumnError(error)
+      ) {
         console.warn("[IMAGE] falha ao salvar", error.message);
       }
     } catch (error) {
       console.warn("[IMAGE] persistencia ignorada", error?.message || error);
     }
 
+    // ✅ Resposta final
     return sendSuccess(res, {
       images: [{ url: imageUrl }],
       credits: creditResult.credits,
     });
+
   } catch (error) {
-    console.error("[IMAGE]", error);
+    console.error("[IMAGE ERROR]", error);
     return sendError(res, 500, "Erro ao gerar imagem");
   }
 });
+
+/* -------- ROTAS -------- */
 
 app.use("/api", router);
 
@@ -1175,10 +1235,13 @@ const LEGACY_ROUTE_PREFIXES = [
 
 app.use((req, res, next) => {
   if (req.path.startsWith("/api")) return next();
+
   const shouldRedirect = LEGACY_ROUTE_PREFIXES.some(
     (prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`)
   );
+
   if (!shouldRedirect) return next();
+
   return res.redirect(307, `/api${req.path}`);
 });
 
@@ -1186,7 +1249,6 @@ app.use((req, res) => {
   console.log("❌ 404:", req.method, req.originalUrl);
   res.status(404).json({ error: "Not found" });
 });
-
 /* -------- ERROR HANDLER -------- */
 
 app.use((err, req, res, _next) => {
