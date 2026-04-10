@@ -280,7 +280,7 @@ export default function ChatPage() {
       }
 
       await fetchHistory();
-      }
+      
     } catch (err) {
       console.error("[AI] Chat error", err);
       toast.error(
