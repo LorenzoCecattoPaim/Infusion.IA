@@ -267,8 +267,9 @@ export default function ChatPage() {
         }
       }
 
-      if (conversationId) {
-        await persistMessage(conversationId, "assistant", finalContent);
+        if (conversationId && finalContent.trim()) {
+          await persistMessage(conversationId, "assistant", finalContent);
+        }
         await fetchHistory();
       }
     } catch (err) {
