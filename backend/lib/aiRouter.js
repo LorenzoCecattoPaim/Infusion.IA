@@ -165,20 +165,38 @@ async function callModel({
   temperature,
   maxTokens,
 }) {
-  const payload = {
-    model,
-    messages: buildMessages(systemPrompt, messages),
-    temperature,
-    max_completion_tokens: maxTokens,
-  };
+  const input = [
+    ...(systemPrompt
+      ? [{ role: "system", content: systemPrompt }]
+      : []),
+    ...messages,
+  ];
 
-  if (requireJson) {
-    payload.response_format = { type: "json_object" };
+  const response = await client.responses.create({
+    model,
+    input,
+    temperature,
+    max_output_tokens: maxTokens,
+    ...(requireJson && {
+      response_format: { type: "json_object" },
+    }),
+  });
+
+  // 🔥 EXTRAÇÃO CORRETA
+  let content = "";
+
+  if (response.output_text) {
+    content = response.output_text;
+  } else {
+    content =
+      response?.output?.[0]?.content?.[0]?.text ||
+      "";
   }
 
-  const response = await client.chat.completions.create(payload);
-  const content = response?.choices?.[0]?.message?.content ?? "";
-  return { content, usage: response?.usage };
+  return {
+    content,
+    usage: response?.usage,
+  };
 }
 
 export async function executarAgente({
