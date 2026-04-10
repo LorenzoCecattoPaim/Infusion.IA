@@ -169,7 +169,7 @@ async function callModel({
     model,
     messages: buildMessages(systemPrompt, messages),
     temperature,
-    max_tokens: maxTokens,
+    max_completion_tokens: maxTokens,
   };
 
   if (requireJson) {
