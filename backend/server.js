@@ -985,6 +985,8 @@ router.post("/generate-text", requireAuth, async (req, res) => {
       debugTag: "generate-text",
     });
 
+    console.log("[AI RAW RESPONSE]", text);
+
     let parsed = safeParseJSON(text, null);
 
     if (!parsed || typeof parsed !== "object") {
@@ -1215,4 +1217,3 @@ app.listen(port, () => {
     console.error(" Falha ao sincronizar planos:", err);
   }
 })();
-console.log("[AI RAW RESPONSE]", text);
