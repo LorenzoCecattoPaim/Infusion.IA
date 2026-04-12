@@ -75,25 +75,6 @@ IMPORTANT RULES:
   }
 }
 
-    const data = await res.json();
-
-    // 🔥 2. PÓS-PROCESSAMENTO (GARANTIR QUALIDADE)
-    if (data.prompt) {
-      data.prompt = `${data.prompt},
-professional composition,
-depth of field,
-soft shadows,
-ultra realistic,
-4k, highly detailed,
-sharp focus, cinematic lighting`;
-    }
-
-    return data;
-  } catch (error) {
-    console.error("[generatePosts] error:", error);
-    throw error;
-  }
-}
 
 export async function generateText(
   payload: GenerateTextPayload
@@ -148,7 +129,25 @@ export async function generatePostPrompt(
     throw new Error(err.error || "Erro ao gerar prompt do post.");
   }
 
-  return res.json();
+  const data = await res.json();
+
+  // 🔥 PÓS-PROCESSAMENTO (QUALIDADE DA IMAGEM)
+  if (data.prompt) {
+    data.prompt = `${data.prompt},
+professional advertising poster,
+premium design,
+balanced composition,
+modern layout,
+high contrast,
+cinematic lighting,
+depth of field,
+soft shadows,
+ultra realistic,
+4k, highly detailed,
+sharp focus`;
+  }
+
+  return data;
 }
 
 export async function generateImage(payload: {
