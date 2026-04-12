@@ -37,8 +37,8 @@ export default function ChatMessage({ role, content, timestamp }: ChatMessagePro
         )}
       >
         {isAssistant ? (
-          <div className="chat-markdown">
-            <ReactMarkdown>{content}</ReactMarkdown>
+          <div className="chat-markdown space-y-4 leading-relaxed">
+            <ReactMarkdown className="space-y-4 leading-relaxed">{content}</ReactMarkdown>
           </div>
         ) : (
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{content}</p>

@@ -30,11 +30,12 @@ interface Logo {
   prompt: string;
 }
 
-const STAGE_LABELS: Record<number, string> = {
-  0: "Coletando informações da sua marca",
-  1: "Definindo estilo e identidade visual",
-  2: "Gerando logos personalizados",
-  3: "Refinando e criando variações",
+type LogoPhase = "collecting_inputs" | "generating" | "done";
+
+const PHASE_LABELS: Record<LogoPhase, string> = {
+  collecting_inputs: "Coletando informações da sua marca",
+  generating: "Gerando logos personalizados",
+  done: "Logos prontos para escolha",
 };
 
 export default function LogoGeneratorPage() {
@@ -43,7 +44,7 @@ export default function LogoGeneratorPage() {
   const [loading, setLoading] = useState(false);
   const [logos, setLogos] = useState<Logo[]>([]);
   const [previewLogo, setPreviewLogo] = useState<Logo | null>(null);
-  const [stage, setStage] = useState(0);
+  const [logoPhase, setLogoPhase] = useState<LogoPhase>("collecting_inputs");
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { credits } = useCredits();
@@ -69,7 +70,10 @@ export default function LogoGeneratorPage() {
   }, [messages, logos]);
 
   const callLogoApi = async (payload: Record<string, unknown>) => {
-    if (credits < imageCost) {
+    const action = typeof payload.action === "string" ? payload.action : null;
+    const requiresCredits =
+      action === "generate_logos" || action === "generate_variations";
+    if (requiresCredits && credits < imageCost) {
       throw new Error(
         `Créditos insuficientes. Necessário: ${imageCost}, disponível: ${credits}`
       );
@@ -107,6 +111,7 @@ export default function LogoGeneratorPage() {
     };
     setMessages((prev) => [...prev, newMsg]);
     setLoading(true);
+    setLogoPhase("collecting_inputs");
 
     try {
       const allMessages = [...messages, newMsg].map((m) => ({
@@ -126,9 +131,12 @@ export default function LogoGeneratorPage() {
         },
       ]);
 
-      if (data.logos?.length) {
+      if (data.phase === "done" && data.logos?.length) {
         setLogos(data.logos);
-        setStage((prev) => Math.min(prev + 1, 3));
+        setLogoPhase("done");
+      } else {
+        setLogos([]);
+        setLogoPhase("collecting_inputs");
       }
 
       queryClient.invalidateQueries({ queryKey: ["credits"] });
@@ -151,6 +159,7 @@ export default function LogoGeneratorPage() {
     };
     setMessages((prev) => [...prev, actionMsg]);
     setLoading(true);
+    setLogoPhase("generating");
 
     try {
       const allMessages = [...messages, actionMsg].map((m) => ({
@@ -172,7 +181,10 @@ export default function LogoGeneratorPage() {
       ]);
       if (data.logos?.length) {
         setLogos(data.logos);
-        setStage(2);
+        setLogoPhase("done");
+      } else {
+        setLogos([]);
+        setLogoPhase("collecting_inputs");
       }
       queryClient.invalidateQueries({ queryKey: ["credits"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
@@ -194,6 +206,7 @@ export default function LogoGeneratorPage() {
     };
     setMessages((prev) => [...prev, actionMsg]);
     setLoading(true);
+    setLogoPhase("generating");
 
     try {
       const allMessages = [...messages, actionMsg].map((m) => ({
@@ -216,7 +229,10 @@ export default function LogoGeneratorPage() {
       ]);
       if (data.logos?.length) {
         setLogos(data.logos);
-        setStage(3);
+        setLogoPhase("done");
+      } else {
+        setLogos([]);
+        setLogoPhase("collecting_inputs");
       }
       queryClient.invalidateQueries({ queryKey: ["credits"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
@@ -254,7 +270,7 @@ export default function LogoGeneratorPage() {
               Criador de logo com IA
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {STAGE_LABELS[stage]}
+              {PHASE_LABELS[logoPhase]}
             </p>
           </div>
           <Badge variant="outline" className="border-border text-muted-foreground">
@@ -272,7 +288,7 @@ export default function LogoGeneratorPage() {
             />
           ))}
 
-          {logos.length > 0 && (
+          {logoPhase === "done" && logos.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">Opções geradas</p>
@@ -413,6 +429,12 @@ export default function LogoGeneratorPage() {
     </DashboardLayout>
   );
 }
+
+
+
+
+
+
 
 
 

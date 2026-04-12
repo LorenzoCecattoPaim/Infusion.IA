@@ -50,7 +50,7 @@ export function useBusinessProfile() {
   const localFallback = readLocalProfile();
 
   const { data: profile, isLoading } = useQuery({
-    queryKey: ["business_profile", user?.id],
+    queryKey: ["business_profile", user?.id ?? "local"],
     queryFn: async () => {
       if (!user) return localFallback;
       try {
@@ -66,7 +66,6 @@ export function useBusinessProfile() {
         return localFallback;
       }
     },
-    enabled: !!user,
     initialData: localFallback ?? null,
   });
 
@@ -74,6 +73,7 @@ export function useBusinessProfile() {
     const currentLocal = readLocalProfile() || {};
     const merged = { ...currentLocal, ...updates } as BusinessProfile;
     writeLocalProfile(merged);
+    queryClient.setQueryData(["business_profile", user?.id ?? "local"], merged);
 
     if (!user) return;
     await fetchFunctions("/profile", {

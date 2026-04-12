@@ -153,7 +153,11 @@
   .chat-markdown ul { @apply list-disc list-inside space-y-1 my-2; }
   .chat-markdown ol { @apply list-decimal list-inside space-y-1 my-2; }
   .chat-markdown li { @apply text-sm text-foreground; }
-  .chat-markdown p { @apply text-sm text-foreground leading-relaxed my-1.5; }
+  .chat-markdown p { @apply text-sm text-foreground leading-relaxed my-2; }
+
+  .chat-markdown > * + * {
+    margin-top: 0.75rem;
+  }
 
   .chat-markdown code {
     @apply bg-secondary text-primary font-mono text-xs px-1.5 py-0.5 rounded;

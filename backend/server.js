@@ -9,11 +9,14 @@ import {
   AGENTE_6_GERADOR_TEXTO,
   AGENTE_7_GERADOR_POSTS_IMAGEM,
   AGENTE_LOGO_PROMPT_BUILDER,
+  AGENTE_LOGO_READY_CHECK,
   executarAgente,
   renderBusinessPrompt,
   safeParseJSON,
   validateWithAgent,
 } from "./ai.js";
+import { buildImagePrompt } from "./lib/imagePromptBuilder.js";
+import OpenAI from "openai";
 
 const app = express();
 
@@ -377,6 +380,21 @@ function isMissingTableError(error) {
 function isMissingColumnError(error) {
   const message = (error?.message || "").toLowerCase();
   return message.includes("column") && message.includes("does not exist");
+}
+
+async function loadBusinessProfile(supabase, userId) {
+  if (!userId) return null;
+  try {
+    const { data } = await supabase
+      .from("business_profiles")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+    return data || null;
+  } catch (error) {
+    console.warn("[PROFILE] perfil indisponivel", error?.message || error);
+    return null;
+  }
 }
 
 function buildPlaceholderImage(label = "Imagem") {
@@ -777,17 +795,7 @@ router.post("/ai-chat", requireAuth, async (req, res) => {
       return sendInsufficientCredits(res, creditResult.credits);
     }
 
-    let profile = null;
-    try {
-      const { data } = await supabase
-        .from("business_profiles")
-        .select("*")
-        .eq("user_id", req.user.id)
-        .maybeSingle();
-      profile = data || null;
-    } catch (error) {
-      console.warn("[AI-CHAT] perfil indisponivel", error?.message || error);
-    }
+    const profile = await loadBusinessProfile(supabase, req.user.id);
 
     const systemPrompt = renderBusinessPrompt(
       AGENTE_1_CONSULTOR_MARKETING,
@@ -860,6 +868,46 @@ router.post("/logo-generator", requireAuth, async (req, res) => {
     }
 
     const supabase = getSupabase();
+    const profile = await loadBusinessProfile(supabase, req.user.id);
+    const designerPrompt = renderBusinessPrompt(
+      AGENTE_2_DESIGNER_LOGO,
+      profile,
+      null
+    );
+
+    const assistantMessage = await executarAgente({
+      agente: "AGENTE_2_DESIGNER_LOGO",
+      systemPrompt: designerPrompt,
+      messages: normalizedMessages,
+      maxTokens: 1200,
+      temperature: 0.7,
+      debugTag: "logo-generator",
+    });
+
+    const readyCheck = await executarAgente({
+      agente: "AGENTE_LOGO_READY_CHECK",
+      systemPrompt: AGENTE_LOGO_READY_CHECK,
+      messages: normalizedMessages,
+      requireJson: true,
+      maxTokens: 400,
+      temperature: 0.1,
+      debugTag: "logo-ready-check",
+    });
+
+    const readiness = safeParseJSON(readyCheck, { ready: false, missing: [] });
+    const shouldGenerate =
+      action === "generate_logos" ||
+      action === "generate_variations" ||
+      readiness?.ready === true;
+
+    if (!shouldGenerate) {
+      return res.json({
+        message: assistantMessage,
+        logos: [],
+        phase: "collecting_inputs",
+      });
+    }
+
     const creditResult = await consumeCredits({
       supabase,
       userId: req.user.id,
@@ -871,18 +919,15 @@ router.post("/logo-generator", requireAuth, async (req, res) => {
       return sendInsufficientCredits(res, creditResult.credits);
     }
 
-    const assistantMessage = await executarAgente({
-      agente: "AGENTE_2_DESIGNER_LOGO",
-      systemPrompt: AGENTE_2_DESIGNER_LOGO,
-      messages: normalizedMessages,
-      maxTokens: 1200,
-      temperature: 0.7,
-      debugTag: "logo-generator",
-    });
+    const promptBuilderPrompt = renderBusinessPrompt(
+      AGENTE_LOGO_PROMPT_BUILDER,
+      profile,
+      null
+    );
 
     const promptResponse = await executarAgente({
       agente: "AGENTE_LOGO_PROMPT_BUILDER",
-      systemPrompt: AGENTE_LOGO_PROMPT_BUILDER,
+      systemPrompt: promptBuilderPrompt,
       messages: normalizedMessages,
       requireJson: true,
       maxTokens: 1200,
@@ -893,11 +938,35 @@ router.post("/logo-generator", requireAuth, async (req, res) => {
     const parsed = safeParseJSON(promptResponse, null);
     const prompts = Array.isArray(parsed?.prompts) ? parsed.prompts : [];
     const descriptions = Array.isArray(parsed?.descriptions) ? parsed.descriptions : [];
-    const logos = prompts.slice(0, 3).map((prompt, index) => ({
-      url: buildPlaceholderImage(`Logo ${index + 1}`),
-      description: descriptions[index] || "",
-      prompt,
-    }));
+    const promptsToUse = prompts.slice(0, 3);
+    const logos = [];
+
+    for (let i = 0; i < promptsToUse.length; i += 1) {
+      const rawPrompt = promptsToUse[i];
+      const { optimizedPrompt } = buildImagePrompt({
+        prompt: rawPrompt,
+        quality: "premium",
+        businessProfile: profile,
+        purpose: "logo",
+      });
+
+      const result = await openai.images.generate({
+        model: "gpt-image-1",
+        prompt: optimizedPrompt,
+        size: "1024x1024",
+      });
+
+      const imageBase64 = result.data?.[0]?.b64_json;
+      const imageUrl = imageBase64
+        ? `data:image/png;base64,${imageBase64}`
+        : buildPlaceholderImage(`Logo ${i + 1}`);
+
+      logos.push({
+        url: imageUrl,
+        description: descriptions[i] || "",
+        prompt: optimizedPrompt,
+      });
+    }
 
     if (logos.length) {
       try {
@@ -920,6 +989,7 @@ router.post("/logo-generator", requireAuth, async (req, res) => {
       message: assistantMessage,
       logos,
       credits: creditResult.credits,
+      phase: "done",
     });
   } catch (error) {
     console.error("[LOGO]", error);
@@ -974,9 +1044,16 @@ router.post("/generate-text", requireAuth, async (req, res) => {
       .filter(Boolean)
       .join("\n");
 
+    const profile = await loadBusinessProfile(supabase, req.user.id);
+    const systemPrompt = renderBusinessPrompt(
+      AGENTE_6_GERADOR_TEXTO,
+      profile,
+      null
+    );
+
     const text = await executarAgente({
       agente: "AGENTE_6_GERADOR_TEXTO",
-      systemPrompt: AGENTE_6_GERADOR_TEXTO,
+      systemPrompt,
       messages: [{ role: "user", content: basePrompt }],
       requireJson: true,
       temperature: 0.7,
@@ -1036,9 +1113,16 @@ router.post("/generate-posts", requireAuth, async (req, res) => {
       .filter(Boolean)
       .join("\n");
 
+    const profile = await loadBusinessProfile(supabase, req.user.id);
+    const systemPrompt = renderBusinessPrompt(
+      AGENTE_3_GERADOR_POSTS,
+      profile,
+      null
+    );
+
     const response = await executarAgente({
       agente: "AGENTE_3_GERADOR_POSTS",
-      systemPrompt: AGENTE_3_GERADOR_POSTS,
+      systemPrompt,
       messages: [{ role: "user", content: payload }],
       requireJson: true,
       temperature: 0.7,
@@ -1083,9 +1167,16 @@ router.post("/generate-post-prompt", requireAuth, async (req, res) => {
       .filter(Boolean)
       .join("\n");
 
+    const profile = await loadBusinessProfile(supabase, req.user.id);
+    const systemPrompt = renderBusinessPrompt(
+      AGENTE_7_GERADOR_POSTS_IMAGEM,
+      profile,
+      null
+    );
+
     const response = await executarAgente({
       agente: "AGENTE_7_GERADOR_POSTS_IMAGEM",
-      systemPrompt: AGENTE_7_GERADOR_POSTS_IMAGEM,
+      systemPrompt,
       messages: [{ role: "user", content: prompt }],
       requireJson: true,
       temperature: 0.6,
@@ -1109,18 +1200,25 @@ router.post("/generate-post-prompt", requireAuth, async (req, res) => {
 
 /* -------- GENERATE IMAGE -------- */
 
-import OpenAI from "openai";
-
 const openai = new OpenAI({
   apiKey: process.env.AI_API_KEY,
 });
 
 router.post("/generate-image", requireAuth, async (req, res) => {
   try {
-    const { prompt } = req.body || {};
+    const body = req.body || {};
+    const {
+      prompt,
+      quality = "standard",
+      template = null,
+      format = null,
+      incluir_espaco_logo = false,
+    } = body;
+    const style = body.style ?? body.estilo ?? null;
     if (!prompt) return sendError(res, 400, "prompt required");
 
     const supabase = getSupabase();
+    const profile = await loadBusinessProfile(supabase, req.user.id);
 
     // 💳 Consumo de créditos
     const creditResult = await consumeCredits({
@@ -1134,12 +1232,23 @@ router.post("/generate-image", requireAuth, async (req, res) => {
       return sendInsufficientCredits(res, creditResult.credits);
     }
 
-    console.log("[IMAGE] Gerando imagem com prompt:", prompt);
+    const { optimizedPrompt, negativePrompt } = buildImagePrompt({
+      prompt,
+      template,
+      format,
+      style,
+      quality,
+      businessProfile: profile,
+      includeLogoSpace: Boolean(incluir_espaco_logo),
+      purpose: "image",
+    });
+
+    console.log("[IMAGE] Gerando imagem com prompt:", optimizedPrompt);
 
     // 🎨 Gerar imagem
     const result = await openai.images.generate({
       model: "gpt-image-1",
-      prompt,
+      prompt: optimizedPrompt,
       size: "1024x1024",
     });
 
@@ -1184,9 +1293,9 @@ router.post("/generate-image", requireAuth, async (req, res) => {
         user_id: req.user.id,
         url: imageUrl,
         prompt,
-        optimized_prompt: null,
-        negative_prompt: null,
-        quality: "standard",
+        optimized_prompt: optimizedPrompt,
+        negative_prompt: negativePrompt,
+        quality,
       });
 
       if (
@@ -1202,7 +1311,13 @@ router.post("/generate-image", requireAuth, async (req, res) => {
 
     // ✅ Resposta final
     return sendSuccess(res, {
-      images: [{ url: imageUrl }],
+      images: [
+        {
+          url: imageUrl,
+          optimized_prompt: optimizedPrompt,
+          negative_prompt: negativePrompt,
+        },
+      ],
       credits: creditResult.credits,
     });
 

@@ -40,22 +40,63 @@ export interface GenerateTextResponse {
 export async function generatePosts(
   payload: GeneratePostsPayload
 ): Promise<GeneratePostsResponse> {
-  const res = await fetchFunctions("/generate-posts", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json; charset=UTF-8",
-    },
-    body: JSON.stringify(payload),
-  });
+  try {
+    // 🔥 1. ENRIQUECER DESCRIÇÃO (ANTI PROMPT FRACO)
+    const enhancedPayload = {
+      ...payload,
+      descricao: `
+${payload.descricao}
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    console.error("[AI] generatePosts error", { status: res.status, err });
-    if (res.status === 402) throw new Error("Créditos insuficientes.");
-    throw new Error(err.error || "Erro ao gerar posts.");
+IMPORTANT RULES:
+- Do NOT include readable text inside the image
+- Represent content using icons, UI elements or visual metaphors
+- Focus on visual composition, not written content
+- Create a professional marketing-style image
+
+STYLE: ${payload.estilo}
+FORMAT: ${payload.formato}
+      `,
+    };
+
+    console.log("📦 Payload enviado:", enhancedPayload);
+
+    const res = await fetchFunctions("/generate-posts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=UTF-8",
+      },
+      body: JSON.stringify(enhancedPayload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error("[AI] generatePosts error", { status: res.status, err });
+
+      if (res.status === 402) {
+        throw new Error("Créditos insuficientes.");
+      }
+
+      throw new Error(err.error || "Erro ao gerar posts.");
+    }
+
+    const data = await res.json();
+
+    // 🔥 2. PÓS-PROCESSAMENTO (GARANTIR QUALIDADE)
+    if (data.prompt) {
+      data.prompt = `${data.prompt},
+professional composition,
+depth of field,
+soft shadows,
+ultra realistic,
+4k, highly detailed,
+sharp focus, cinematic lighting`;
+    }
+
+    return data;
+  } catch (error) {
+    console.error("[generatePosts] error:", error);
+    throw error;
   }
-
-  return res.json();
 }
 
 export async function generateText(
@@ -119,6 +160,8 @@ export async function generateImage(payload: {
   quality?: "standard" | "premium";
   template?: string | null;
   format?: string;
+  style?: string | null;
+  incluir_espaco_logo?: boolean;
 }) {
   const res = await fetchFunctions("/generate-image", {
     method: "POST",

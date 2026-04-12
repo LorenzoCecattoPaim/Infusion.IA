@@ -12,6 +12,7 @@ const JSON_AGENTS = new Set([
   "AGENTE_6_GERADOR_TEXTO",
   "AGENTE_7_GERADOR_POSTS_IMAGEM",
   "AGENTE_LOGO_PROMPT_BUILDER",
+  "AGENTE_LOGO_READY_CHECK",
 ]);
 
 export const AGENTE_1_CONSULTOR_MARKETING = `Você é um Especialista de Marketing voltado para Pequenas e Médias Empresas Brasileiras. Seu foco principal é organizar o Marketing (criar um cronograma de postagens, sugerir campanhas de marketing para próximas datas comemorativas, montar uma estratégia de marketing eficaz e aprofundada, oferecer insights valiosos baseados em empresas do mesmo setor globalmente, sugerir melhores horários e formatos de postagem, oferecer insights com base na psicologia do consumo).
@@ -78,6 +79,19 @@ Use a conversa fornecida para gerar três prompts claros e objetivos para criaç
 
 Responda APENAS em JSON válido no formato:
 {"prompts": ["prompt1", "prompt2", "prompt3"], "descriptions": ["desc1", "desc2", "desc3"]}`;
+
+export const AGENTE_LOGO_READY_CHECK = `Você é um verificador de fluxo para criação de logos.
+
+Analise a conversa entre usuário e assistente e determine se TODAS as informações essenciais para criar o logo já foram coletadas:
+- Nome completo da marca
+- Mercado/segmento de atuação
+- Estilo da marca (tradicional/séria, jovem/descontraída, minimalista/futurista, maximalista/sensorial)
+- Cores desejadas (ou autorização para escolher automaticamente)
+
+Responda APENAS em JSON válido:
+{"ready": true, "missing": []}
+
+Se faltar algo, ready deve ser false e missing deve listar os itens faltantes (ex.: ["cores", "estilo"]).`;
 
 export const AGENTE_3_GERADOR_POSTS = `Você é um Especialista em Criação de Conteúdo para Redes Sociais com foco em pequenas e médias empresas brasileiras.
 
@@ -317,22 +331,22 @@ export async function validateWithAgent(content) {
   }
 }
 
-export function renderBusinessPrompt(basePrompt, profile, materialsContext) {
-  if (!profile) return normalizeSystemPrompt(basePrompt);
+export function buildSystemContext(profile, materialsContext) {
+  if (!profile && !materialsContext) return "";
 
-  const segmento = profile.segmento_atuacao || profile.segmento || "Não informado";
+  const segmento = profile?.segmento_atuacao || profile?.segmento || "Não informado";
   const objetivo =
-    profile.objetivo_principal || profile.objetivos_marketing || "Não informado";
-  const publico = profile.publico_alvo || "Não informado";
-  const tom = profile.tom_comunicacao || "Não informado";
-  const marca = profile.marca_descricao || profile.diferenciais || "Não informado";
+    profile?.objetivo_principal || profile?.objetivos_marketing || "Não informado";
+  const publico = profile?.publico_alvo || "Não informado";
+  const tom = profile?.tom_comunicacao || "Não informado";
+  const marca = profile?.marca_descricao || profile?.diferenciais || "Não informado";
   const canais =
-    (profile.canais_atuacao || profile.redes_sociais || []).join?.(", ") ||
+    (profile?.canais_atuacao || profile?.redes_sociais || []).join?.(", ") ||
     "Não informado";
-  const conteudo = (profile.tipo_conteudo || []).join?.(", ") || "Não informado";
-  const nivel = profile.nivel_experiencia || "Não informado";
-  const desafio = profile.maior_desafio || profile.desafios || "Não informado";
-  const usoIa = profile.uso_ia || "Não informado";
+  const conteudo = (profile?.tipo_conteudo || []).join?.(", ") || "Não informado";
+  const nivel = profile?.nivel_experiencia || "Não informado";
+  const desafio = profile?.maior_desafio || profile?.desafios || "Não informado";
+  const usoIa = profile?.uso_ia || "Não informado";
 
   const profileLines = [
     `- Segmento: ${segmento}`,
@@ -347,12 +361,18 @@ export function renderBusinessPrompt(basePrompt, profile, materialsContext) {
     `- Uso da IA: ${usoIa}`,
   ].join("\n");
 
-  const profileContext = `\n\nContexto da empresa:\n${profileLines}`;
+  const profileContext = profile ? `\n\nContexto da empresa:\n${profileLines}` : "";
   const materialsSection = materialsContext
     ? `\n\nMATERIAIS FORNECIDOS PELO CLIENTE:\n${materialsContext}`
     : "";
 
-  return `${normalizeSystemPrompt(basePrompt)}${profileContext}${materialsSection}`;
+  return `${profileContext}${materialsSection}`;
+}
+
+export function renderBusinessPrompt(basePrompt, profile, materialsContext) {
+  const base = normalizeSystemPrompt(basePrompt);
+  const context = buildSystemContext(profile, materialsContext);
+  return `${base}${context}`;
 }
 
 export function safeParseJSON(text, fallback) {

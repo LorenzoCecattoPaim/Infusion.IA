@@ -132,9 +132,9 @@ export default function PostGeneratorPage() {
 
       const result = await generateImage({
         prompt: promptToUse,
-        quality: "standard",
-        template: "post-social",
+        style: estilo,
         format: formato,
+        incluir_espaco_logo: incluirEspacoLogo,
       });
 
       setImages(result.images || []);
