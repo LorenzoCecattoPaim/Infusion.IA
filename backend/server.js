@@ -1156,6 +1156,8 @@ router.post("/generate-post-prompt", requireAuth, async (req, res) => {
       return sendError(res, 400, "Dados insuficientes para gerar o prompt.");
     }
 
+    const supabase = getSupabase();
+    
     const prompt = [
       `Tipo de post: ${tipo_post}`,
       `Descrição: ${descricao}`,
