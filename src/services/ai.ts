@@ -42,8 +42,8 @@ export async function generatePosts(
 ): Promise<GeneratePostsResponse> {
   try {
     const enhancedPayload = {
-  ...payload,
-  descricao: `
+      ...payload,
+      descricao: `
 ${payload.brief || ""}
 
 IMPORTANT RULES:
@@ -52,10 +52,7 @@ IMPORTANT RULES:
 - Focus on visual composition, not written content
 - Create a professional marketing-style image
 `,
-};
     };
-
-    console.log("📦 Payload enviado:", enhancedPayload);
 
     const res = await fetchFunctions("/generate-posts", {
       method: "POST",
@@ -67,14 +64,16 @@ IMPORTANT RULES:
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      console.error("[AI] generatePosts error", { status: res.status, err });
-
-      if (res.status === 402) {
-        throw new Error("Créditos insuficientes.");
-      }
-
+      if (res.status === 402) throw new Error("Créditos insuficientes.");
       throw new Error(err.error || "Erro ao gerar posts.");
     }
+
+    return res.json();
+  } catch (error) {
+    console.error("[generatePosts] error:", error);
+    throw error;
+  }
+}
 
     const data = await res.json();
 
