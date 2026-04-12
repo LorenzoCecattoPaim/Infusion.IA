@@ -41,11 +41,39 @@ export async function generatePosts(
   payload: GeneratePostsPayload
 ): Promise<GeneratePostsResponse> {
   try {
-    // 🔥 1. ENRIQUECER DESCRIÇÃO (ANTI PROMPT FRACO)
     const enhancedPayload = {
       ...payload,
       descricao: `
 ${payload.brief || ""}
+
+IMPORTANT RULES:
+- Do NOT include readable text inside the image
+- Represent content using icons, UI elements or visual metaphors
+- Focus on visual composition, not written content
+- Create a professional marketing-style image
+`,
+    };
+
+    const res = await fetchFunctions("/generate-posts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=UTF-8",
+      },
+      body: JSON.stringify(enhancedPayload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (res.status === 402) throw new Error("Créditos insuficientes.");
+      throw new Error(err.error || "Erro ao gerar posts.");
+    }
+
+    return res.json();
+  } catch (error) {
+    console.error("[generatePosts] error:", error);
+    throw error;
+  }
+}
 
 IMPORTANT RULES:
 - Do NOT include readable text inside the image
