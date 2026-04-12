@@ -53,7 +53,6 @@ IMPORTANT RULES:
 - Create a professional marketing-style image
 `,
 };
-      `,
     };
 
     console.log("📦 Payload enviado:", enhancedPayload);
