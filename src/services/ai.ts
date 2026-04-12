@@ -45,7 +45,7 @@ export async function generatePosts(
     const enhancedPayload = {
       ...payload,
       descricao: `
-${payload.descricao}
+${payload.brief || ""}
 
 IMPORTANT RULES:
 - Do NOT include readable text inside the image
