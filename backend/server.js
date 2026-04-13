@@ -17,8 +17,21 @@ import {
 } from "./ai.js";
 import { buildImagePrompt } from "./lib/imagePromptBuilder.js";
 import OpenAI from "openai";
+import {
+  ensureCreditsRow,
+  consumeCredits,
+} from "./src/payments/credits.service.js";
+import { InfinitePayGateway } from "./src/payments/infinitepay.gateway.js";
+import {
+  createPayment,
+  getPaymentStatus,
+  processWebhook,
+  retryPayment,
+} from "./src/payments/payment.service.js";
+import { createInfinitePayWebhookHandler } from "./src/payments/webhook.controller.js";
 
 const app = express();
+app.set("trust proxy", 1);
 
 /* =========================
    🔥 CORS ULTRA PROFISSIONAL
@@ -69,15 +82,33 @@ app.use(express.json({ limit: "5mb" }));
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SERVICE_ROLE_KEY;
+const INFINITEPAY_HANDLE = process.env.INFINITEPAY_HANDLE;
+const INFINITEPAY_BASE_URL = process.env.INFINITEPAY_BASE_URL;
+const INFINITEPAY_WEBHOOK_SECRET = process.env.INFINITEPAY_WEBHOOK_SECRET;
 
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   throw new Error("SUPABASE_URL e SERVICE_ROLE_KEY são obrigatórios");
+}
+
+if (!INFINITEPAY_HANDLE || !INFINITEPAY_BASE_URL || !INFINITEPAY_WEBHOOK_SECRET) {
+  throw new Error(
+    "INFINITEPAY_HANDLE, INFINITEPAY_BASE_URL e INFINITEPAY_WEBHOOK_SECRET são obrigatórios"
+  );
 }
 
 function getSupabase() {
   return createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+function getBaseUrl(req) {
+  const explicit = process.env.APP_BASE_URL || process.env.PUBLIC_BASE_URL;
+  if (explicit) return explicit.replace(/\\/$/, "");
+
+  const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+  const host = req.headers["x-forwarded-host"] || req.get("host");
+  return `${proto}://${host}`;
 }
 
 function sendSuccess(res, data = {}, status = 200) {
@@ -88,7 +119,6 @@ function sendError(res, status, message) {
   res.status(status).json({ error: message });
 }
 
-const DEFAULT_FREE_CREDITS = 100;
 const CREDIT_COSTS = {
   text: 5,
   image: 15,
@@ -148,6 +178,19 @@ const PLAN_CATALOG = {
     },
   ],
 };
+
+const infinitePayGateway = new InfinitePayGateway({
+  baseUrl: INFINITEPAY_BASE_URL,
+  handle: INFINITEPAY_HANDLE,
+  webhookSecret: INFINITEPAY_WEBHOOK_SECRET,
+  timeoutMs: 10000,
+});
+
+const infinitePayWebhookHandler = createInfinitePayWebhookHandler({
+  webhookSecret: INFINITEPAY_WEBHOOK_SECRET,
+  getSupabase,
+  processWebhook,
+});
 
 function buildPlanRows() {
   const monthly = PLAN_CATALOG.monthly.map((plan) => ({
@@ -299,65 +342,6 @@ async function requireAuth(req, res, next) {
   }
 }
 
-async function ensureCreditsRow(supabase, userId) {
-  const { data, error } = await supabase
-    .from("user_credits")
-    .select("credits, plan")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error) throw error;
-
-  if (!data) {
-    const { data: created, error: insertError } = await supabase
-      .from("user_credits")
-      .insert({ user_id: userId, credits: DEFAULT_FREE_CREDITS, plan: "free" })
-      .select("credits, plan")
-      .single();
-    if (insertError) throw insertError;
-    return created;
-  }
-
-  return data;
-}
-
-async function consumeCredits({ supabase, userId, amount, reason }) {
-  const attempts = 2;
-  for (let i = 0; i < attempts; i += 1) {
-    const current = await ensureCreditsRow(supabase, userId);
-    const available = Number(current.credits || 0);
-
-    if (available < amount) {
-      return { ok: false, credits: available, plan: current.plan || "free" };
-    }
-
-    const next = available - amount;
-    const { data, error } = await supabase
-      .from("user_credits")
-      .update({ credits: next })
-      .eq("user_id", userId)
-      .eq("credits", available)
-      .select("credits, plan")
-      .maybeSingle();
-
-    if (error) throw error;
-
-    if (data) {
-      console.log(
-        `[CREDITS] consumo=${amount} user=${userId} reason=${reason} restante=${data.credits}`
-      );
-      return { ok: true, credits: data.credits, plan: data.plan || "free" };
-    }
-  }
-
-  const refreshed = await ensureCreditsRow(supabase, userId);
-  return {
-    ok: Number(refreshed.credits || 0) >= amount,
-    credits: Number(refreshed.credits || 0),
-    plan: refreshed.plan || "free",
-  };
-}
-
 function sendInsufficientCredits(res, credits) {
   res.status(402).json({
     error: "Créditos insuficientes.",
@@ -448,6 +432,10 @@ router.get("/plans", (_req, res) => {
   });
 });
 
+/* -------- WEBHOOKS -------- */
+
+router.post("/webhook/infinitepay", infinitePayWebhookHandler);
+
 /* -------- PROFILE -------- */
 
 router.get("/profile", requireAuth, async (req, res) => {
@@ -508,6 +496,100 @@ router.get("/credits", requireAuth, async (req, res) => {
   } catch (error) {
     console.error("[CREDITS]", error);
     return sendError(res, 500, "Erro ao carregar créditos.");
+  }
+});
+
+/* -------- PAYMENTS -------- */
+
+router.post("/payments/create", requireAuth, async (req, res) => {
+  try {
+    const { credits, amount_cents, customer } = req.body || {};
+    const parsedCredits = Number(credits);
+    const parsedAmount = Number(amount_cents);
+
+    if (!Number.isFinite(parsedCredits) || parsedCredits <= 0) {
+      return sendError(res, 400, "credits inválido");
+    }
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return sendError(res, 400, "amount_cents inválido");
+    }
+
+    const supabase = getSupabase();
+    const baseUrl = getBaseUrl(req);
+    const result = await createPayment({
+      supabase,
+      gatewayProvider: infinitePayGateway,
+      userId: req.user.id,
+      credits: Math.trunc(parsedCredits),
+      amountCents: Math.trunc(parsedAmount),
+      customer: customer || null,
+      baseUrl,
+    });
+
+    return res.status(201).json({
+      payment_url: result.paymentUrl,
+      order_id: result.orderId,
+      status: result.status,
+    });
+  } catch (error) {
+    console.error("[PAYMENTS] create", error);
+    return sendError(res, 500, "Erro ao criar pagamento.");
+  }
+});
+
+router.get("/payments/:id/status", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isUuid(id)) {
+      return sendError(res, 400, "order_id inválido");
+    }
+
+    const supabase = getSupabase();
+    const status = await getPaymentStatus({
+      supabase,
+      orderId: id,
+      userId: req.user.id,
+    });
+
+    if (!status) {
+      return sendError(res, 404, "Pedido não encontrado.");
+    }
+
+    return sendSuccess(res, { status });
+  } catch (error) {
+    console.error("[PAYMENTS] status", error);
+    return sendError(res, 500, "Erro ao consultar pagamento.");
+  }
+});
+
+router.post("/payments/:id/retry", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isUuid(id)) {
+      return sendError(res, 400, "order_id inválido");
+    }
+
+    const supabase = getSupabase();
+    const baseUrl = getBaseUrl(req);
+    const result = await retryPayment({
+      supabase,
+      gatewayProvider: infinitePayGateway,
+      orderId: id,
+      userId: req.user.id,
+      baseUrl,
+    });
+
+    if (!result) {
+      return sendError(res, 404, "Pedido não encontrado.");
+    }
+
+    return sendSuccess(res, {
+      status: result.status,
+      payment_url: result.paymentUrl,
+    });
+  } catch (error) {
+    console.error("[PAYMENTS] retry", error);
+    return sendError(res, 500, "Erro ao recriar pagamento.");
   }
 });
 
@@ -1337,6 +1419,8 @@ const LEGACY_ROUTE_PREFIXES = [
   "/health",
   "/cors-test",
   "/plans",
+  "/payments",
+  "/webhook",
   "/profile",
   "/credits",
   "/dashboard-stats",
