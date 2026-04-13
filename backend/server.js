@@ -104,10 +104,12 @@ function getSupabase() {
 
 function getBaseUrl(req) {
   const explicit = process.env.APP_BASE_URL || process.env.PUBLIC_BASE_URL;
-  if (explicit) return explicit.replace(/\\/$/, "");
+
+  if (explicit) return explicit.replace(/\/$/, "");
 
   const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
   const host = req.headers["x-forwarded-host"] || req.get("host");
+
   return `${proto}://${host}`;
 }
 
