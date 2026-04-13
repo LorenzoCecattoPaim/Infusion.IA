@@ -43,6 +43,7 @@ export default function LogoGeneratorPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [logos, setLogos] = useState<Logo[]>([]);
+  const [selectedLogo, setSelectedLogo] = useState<Logo | null>(null);
   const [previewLogo, setPreviewLogo] = useState<Logo | null>(null);
   const [logoPhase, setLogoPhase] = useState<LogoPhase>("collecting_inputs");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -196,52 +197,8 @@ export default function LogoGeneratorPage() {
     }
   };
 
-  const handleSelectLogo = async (logo: Logo) => {
-    if (loading) return;
-    const actionMsg: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: "Escolher este",
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, actionMsg]);
-    setLoading(true);
-    setLogoPhase("generating");
-
-    try {
-      const allMessages = [...messages, actionMsg].map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
-      const data = await callLogoApi({
-        messages: allMessages,
-        action: "generate_variations",
-        selectedPrompt: logo.prompt,
-      });
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString() + "-ai",
-          role: "assistant",
-          content: data.message,
-          timestamp: new Date(),
-        },
-      ]);
-      if (data.logos?.length) {
-        setLogos(data.logos);
-        setLogoPhase("done");
-      } else {
-        setLogos([]);
-        setLogoPhase("collecting_inputs");
-      }
-      queryClient.invalidateQueries({ queryKey: ["credits"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
-    } catch (err) {
-      console.error("[AI] Logo generator error", err);
-      toast.error(err instanceof Error ? err.message : "Erro ao gerar variações.");
-    } finally {
-      setLoading(false);
-    }
+  const selectLogo = (logo: Logo) => {
+    setSelectedLogo(logo);
   };
 
   const handleDownloadLogo = async (logo: Logo) => {
@@ -302,43 +259,54 @@ export default function LogoGeneratorPage() {
                 </Button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {logos.map((logo, i) => (
-                  <div
-                    key={i}
-                    className="bg-card border border-border rounded-xl overflow-hidden shadow-card"
-                  >
-                    <img
-                      src={logo.url}
-                      alt={`Logo ${i + 1}`}
-                      className="w-full aspect-square object-contain p-4 cursor-pointer hover:opacity-90 transition-opacity bg-white"
-                      onClick={() => setPreviewLogo(logo)}
-                    />
-                    <div className="p-3 border-t border-border">
-                      {logo.description && (
-                        <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                          {logo.description}
-                        </p>
+                {logos.map((logo, i) => {
+                  const isSelected = selectedLogo?.url === logo.url;
+                  return (
+                    <div
+                      key={i}
+                      className={`relative bg-card border rounded-xl overflow-hidden shadow-card ${
+                        isSelected ? "border-primary ring-2 ring-primary/30" : "border-border"
+                      }`}
+                    >
+                      {isSelected && (
+                        <Badge className="absolute top-3 right-3 bg-primary text-primary-foreground">
+                          Selecionada
+                        </Badge>
                       )}
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          className="flex-1 gradient-primary text-primary-foreground text-xs hover:opacity-90"
-                          onClick={() => handleSelectLogo(logo)}
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" /> Escolher este
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="px-2"
-                          onClick={() => handleDownloadLogo(logo)}
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                        </Button>
+                      <img
+                        src={logo.url}
+                        alt={`Logo ${i + 1}`}
+                        className="w-full aspect-square object-contain p-4 cursor-pointer hover:opacity-90 transition-opacity bg-white"
+                        onClick={() => setPreviewLogo(logo)}
+                      />
+                      <div className="p-3 border-t border-border">
+                        {logo.description && (
+                          <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                            {logo.description}
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            className="flex-1 gradient-primary text-primary-foreground text-xs hover:opacity-90"
+                            onClick={() => selectLogo(logo)}
+                            disabled={loading}
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" /> Escolher este
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="px-2"
+                            onClick={() => handleDownloadLogo(logo)}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
