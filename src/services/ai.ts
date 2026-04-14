@@ -174,6 +174,7 @@ export interface GeneratePostPromptPayload {
   estilo: string;
   incluir_espaco_logo: boolean;
   logo_presente: boolean;
+  product_image_presente?: boolean;
 }
 
 export interface GeneratePostPromptResponse {
@@ -205,7 +206,11 @@ export async function generatePostPrompt(
   );
 
   if (data.prompt) {
-    data.prompt = `${data.prompt},
+    const productNote = payload.product_image_presente
+      ? ",\nfeaturing the provided product image as the main visual subject,"
+      : "";
+
+    data.prompt = `${data.prompt}${productNote},
 professional advertising poster,
 premium design,
 balanced composition,
@@ -229,6 +234,7 @@ export async function generateImage(payload: {
   format?: string;
   style?: string | null;
   incluir_espaco_logo?: boolean;
+  product_image?: string;
 }): Promise<GenerateImageResponse> {
   try {
     return await requestAi<GenerateImageResponse>(

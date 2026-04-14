@@ -47,8 +47,10 @@ export default function PostGeneratorPage() {
   const queryClient = useQueryClient();
   const imageCost = CREDIT_COSTS.image;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const productFileInputRef = useRef<HTMLInputElement>(null);
 
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
+  const [productImageDataUrl, setProductImageDataUrl] = useState<string | null>(null);
   const [tipoPost, setTipoPost] = useState(TIPOS[0]);
   const [descricao, setDescricao] = useState("");
   const [formato, setFormato] = useState(FORMATOS[2].value);
@@ -63,6 +65,7 @@ export default function PostGeneratorPage() {
   const [promptNotes, setPromptNotes] = useState<string | null>(null);
   const runDebounced = useDebouncedAction(500);
 
+  // Logo persistence
   useEffect(() => {
     const savedLogo = localStorage.getItem("infusion_post_logo");
     if (savedLogo) setLogoDataUrl(savedLogo);
@@ -76,11 +79,29 @@ export default function PostGeneratorPage() {
     }
   }, [logoDataUrl]);
 
-  const handleFile = (file?: File | null) => {
+  // Product image persistence
+  useEffect(() => {
+    const savedProduct = localStorage.getItem("infusion_post_product");
+    if (savedProduct) setProductImageDataUrl(savedProduct);
+  }, []);
+
+  useEffect(() => {
+    if (productImageDataUrl) {
+      localStorage.setItem("infusion_post_product", productImageDataUrl);
+    } else {
+      localStorage.removeItem("infusion_post_product");
+    }
+  }, [productImageDataUrl]);
+
+  const handleFile = (file?: File | null, target: "logo" | "product" = "logo") => {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      setLogoDataUrl(reader.result as string);
+      if (target === "logo") {
+        setLogoDataUrl(reader.result as string);
+      } else {
+        setProductImageDataUrl(reader.result as string);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -112,6 +133,7 @@ export default function PostGeneratorPage() {
           estilo,
           incluir_espaco_logo: incluirEspacoLogo,
           logo_presente: !!logoDataUrl,
+          product_image_presente: !!productImageDataUrl,
         });
 
         if (promptResponse.perguntas?.length) {
@@ -140,6 +162,7 @@ export default function PostGeneratorPage() {
         style: estilo,
         format: formato,
         incluir_espaco_logo: incluirEspacoLogo,
+        product_image: productImageDataUrl ?? undefined,
       });
 
       setImages(result.images || []);
@@ -209,6 +232,8 @@ export default function PostGeneratorPage() {
               <CardTitle className="font-display text-foreground">Briefing do post</CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-4">
+
+              {/* Upload de logo */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">Upload de logo</label>
                 <div
@@ -217,7 +242,7 @@ export default function PostGeneratorPage() {
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
-                    handleFile(e.dataTransfer.files?.[0]);
+                    handleFile(e.dataTransfer.files?.[0], "logo");
                   }}
                 >
                   {logoDataUrl ? (
@@ -254,7 +279,58 @@ export default function PostGeneratorPage() {
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={(e) => handleFile(e.target.files?.[0])}
+                    onChange={(e) => handleFile(e.target.files?.[0], "logo")}
+                  />
+                </div>
+              </div>
+
+              {/* Upload de imagem do produto */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Imagem do produto</label>
+                <div
+                  className="border border-dashed border-border rounded-2xl p-4 bg-secondary/40 text-center cursor-pointer hover:border-primary/40 transition-colors"
+                  onClick={() => productFileInputRef.current?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleFile(e.dataTransfer.files?.[0], "product");
+                  }}
+                >
+                  {productImageDataUrl ? (
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={productImageDataUrl}
+                        alt="Produto"
+                        className="h-12 w-12 rounded-lg object-contain bg-background"
+                      />
+                      <div className="text-left">
+                        <p className="text-sm text-foreground font-medium">Imagem carregada</p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProductImageDataUrl(null);
+                          }}
+                        >
+                          Remover
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Upload className="h-5 w-5 text-muted-foreground mx-auto" />
+                      <p className="text-sm text-muted-foreground">
+                        Arraste e solte ou clique para enviar a imagem do produto
+                      </p>
+                    </div>
+                  )}
+                  <input
+                    ref={productFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleFile(e.target.files?.[0], "product")}
                   />
                 </div>
               </div>
@@ -470,4 +546,3 @@ export default function PostGeneratorPage() {
     </DashboardLayout>
   );
 }
-
