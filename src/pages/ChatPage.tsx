@@ -351,7 +351,7 @@ export default function ChatPage() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 md:p-8">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto text-center">
               <div className="gradient-primary rounded-2xl p-4 mb-6 shadow-glow">

@@ -10,6 +10,7 @@ interface ChatMessageProps {
 
 export default function ChatMessage({ role, content, timestamp }: ChatMessageProps) {
   const isAssistant = role === "assistant";
+  const normalizedContent = content.replace(/\r\n/g, "\n").replace(/\\n/g, "\n");
 
   return (
     <div className={cn("flex gap-3", isAssistant ? "items-start" : "items-start flex-row-reverse")}>
@@ -37,11 +38,20 @@ export default function ChatMessage({ role, content, timestamp }: ChatMessagePro
         )}
       >
         {isAssistant ? (
-          <div className="chat-markdown space-y-4 leading-relaxed">
-            <ReactMarkdown className="space-y-4 leading-relaxed">{content}</ReactMarkdown>
-          </div>
+          <ReactMarkdown
+            className="chat-markdown"
+            components={{
+              p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+              ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-3">{children}</ul>,
+              ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-3">{children}</ol>,
+              li: ({ children }) => <li className="text-sm text-foreground leading-[1.6]">{children}</li>,
+              strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+            }}
+          >
+            {normalizedContent}
+          </ReactMarkdown>
         ) : (
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">{content}</p>
+          <p className="text-sm leading-[1.6] whitespace-pre-wrap">{content}</p>
         )}
 
         {timestamp && (
