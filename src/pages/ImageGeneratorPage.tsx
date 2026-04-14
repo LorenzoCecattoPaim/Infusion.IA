@@ -12,7 +12,6 @@ import {
   Building2,
   Palette,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,12 +22,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import DashboardLayout from "@/components/DashboardLayout";
-import { fetchFunctions } from "@/lib/apiBase";
 import { useCredits } from "@/hooks/useCredits";
 import { useGeneratedImages, type GeneratedImage } from "@/hooks/useGeneratedImages";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CREDIT_COSTS } from "@/lib/credits";
+import { generateImage, type GenerateImageItem } from "@/services/ai";
+import { useDebouncedAction } from "@/hooks/useDebouncedAction";
 
 const templates = [
   { id: "post-instagram", label: "Post Instagram", icon: Image },
@@ -43,50 +43,58 @@ export default function ImageGeneratorPage() {
   const [quality, setQuality] = useState<"standard" | "premium">("standard");
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
-  const [selectionResult, setSelectionResult] = useState<GeneratedImage[] | null>(null);
+  const [selectionResult, setSelectionResult] = useState<GenerateImageItem[] | null>(null);
   const galleryRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { credits } = useCredits();
   const { generatedImages, isLoading: imagesLoading } = useGeneratedImages();
   const imageCost = CREDIT_COSTS.image;
+  const runDebounced = useDebouncedAction(500);
 
-  // Keyboard shortcut Ctrl/Cmd+Enter
+  const handleGenerate = () => {
+    if (!prompt.trim()) {
+      toast.error("Descreva a imagem que você quer criar.");
+      return;
+    }
+
+    if (credits < imageCost) {
+      toast.error(`Créditos insuficientes. Necessário: ${imageCost}, disponível: ${credits}`);
+      return;
+    }
+
+    setSelectionResult(null);
+    generateMutation.mutate();
+  };
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        handleGenerate();
+        runDebounced(() => handleGenerate());
       }
     };
+
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [prompt, quality]);
+  }, [runDebounced, prompt, quality, credits, selectedTemplate]);
 
   const generateMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetchFunctions("/generate-image", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json; charset=UTF-8",
-        },
-        body: JSON.stringify({ prompt, quality, template: selectedTemplate }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        if (res.status === 402) throw new Error("Créditos insuficientes.");
-        throw new Error(err.error || "Erro ao gerar imagem.");
-      }
-
-      return res.json();
-    },
-    onSuccess: (data) => {
+    mutationFn: async () =>
+      generateImage({
+        prompt,
+        quality,
+        template: selectedTemplate,
+      }),
+    onSuccess: async (data) => {
       if (data.images?.length) {
         setSelectionResult(data.images);
         galleryRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       }
-      queryClient.invalidateQueries({ queryKey: ["credits"] });
-      queryClient.invalidateQueries({ queryKey: ["generated_images"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["credits"] }),
+        queryClient.invalidateQueries({ queryKey: ["generated_images"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] }),
+      ]);
       toast.success("Imagens geradas! Escolha sua favorita.");
     },
     onError: (err: Error) => {
@@ -95,23 +103,17 @@ export default function ImageGeneratorPage() {
     },
   });
 
-  const handleGenerate = () => {
-    if (!prompt.trim()) {
-      toast.error("Descreva a imagem que você quer criar.");
-      return;
-    }
-    const cost = imageCost;
-    if (credits < cost) {
-      toast.error(`Créditos insuficientes. Necessário: ${cost}, disponível: ${credits}`);
-      return;
-    }
+  const handleSelectImage = (img: GenerateImageItem) => {
     setSelectionResult(null);
-    generateMutation.mutate();
-  };
-
-  const handleSelectImage = (img: GeneratedImage) => {
-    setSelectionResult(null);
-    setSelectedImage(img);
+    setSelectedImage({
+      id: String(img.id || Date.now()),
+      url: img.url,
+      prompt: img.prompt || prompt,
+      optimized_prompt: img.optimized_prompt || null,
+      negative_prompt: img.negative_prompt || null,
+      quality,
+      created_at: new Date().toISOString(),
+    });
   };
 
   const handleDownload = async (img: GeneratedImage) => {
@@ -133,10 +135,8 @@ export default function ImageGeneratorPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col lg:flex-row h-[calc(100vh-3.5rem)] overflow-hidden">
-        {/* Left panel */}
         <div className="w-full lg:w-[420px] xl:w-[460px] border-r border-border flex flex-col shrink-0 bg-card/50">
           <div className="p-5 flex-1 overflow-y-auto space-y-5">
-            {/* Header */}
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="font-display text-lg font-bold text-foreground">
@@ -159,7 +159,6 @@ export default function ImageGeneratorPage() {
               </Badge>
             </div>
 
-            {/* Prompt */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
                 Descreva sua imagem
@@ -176,19 +175,14 @@ export default function ImageGeneratorPage() {
               </p>
             </div>
 
-            {/* Modelos */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                Modelos
-              </label>
+              <label className="text-sm font-medium text-foreground">Modelos</label>
               <div className="flex flex-wrap gap-2">
                 {templates.map((t) => (
                   <button
                     key={t.id}
                     onClick={() =>
-                      setSelectedTemplate(
-                        t.id === selectedTemplate ? null : t.id
-                      )
+                      setSelectedTemplate(t.id === selectedTemplate ? null : t.id)
                     }
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-200 ${
                       selectedTemplate === t.id
@@ -203,11 +197,8 @@ export default function ImageGeneratorPage() {
               </div>
             </div>
 
-            {/* Quality */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                Qualidade
-              </label>
+              <label className="text-sm font-medium text-foreground">Qualidade</label>
               <div className="grid grid-cols-2 gap-2">
                 {[
                   {
@@ -236,14 +227,10 @@ export default function ImageGeneratorPage() {
                   >
                     <q.icon
                       className={`h-4 w-4 mb-1 ${
-                        quality === q.id
-                          ? "text-primary"
-                          : "text-muted-foreground"
+                        quality === q.id ? "text-primary" : "text-muted-foreground"
                       }`}
                     />
-                    <p className="text-xs font-semibold text-foreground">
-                      {q.label}
-                    </p>
+                    <p className="text-xs font-semibold text-foreground">{q.label}</p>
                     <p className="text-xs text-muted-foreground">{q.desc}</p>
                     <p className="text-xs font-bold text-primary mt-1">
                       {q.cost} créditos
@@ -254,10 +241,9 @@ export default function ImageGeneratorPage() {
             </div>
           </div>
 
-          {/* Generate button */}
           <div className="p-5 border-t border-border">
             <Button
-              onClick={handleGenerate}
+              onClick={() => runDebounced(() => handleGenerate())}
               disabled={!prompt.trim() || generateMutation.isPending}
               className="w-full h-12 gradient-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity"
             >
@@ -269,7 +255,7 @@ export default function ImageGeneratorPage() {
               ) : (
                 <>
                   <Sparkles className="h-4 w-4 mr-2" />
-                  Gerar imagens — {imageCost} créditos
+                  Gerar imagens - {imageCost} créditos
                 </>
               )}
             </Button>
@@ -279,12 +265,7 @@ export default function ImageGeneratorPage() {
           </div>
         </div>
 
-        {/* Gallery area */}
-        <div
-          ref={galleryRef}
-          className="flex-1 overflow-y-auto p-5 bg-background"
-        >
-          {/* Variation selection */}
+        <div ref={galleryRef} className="flex-1 overflow-y-auto p-5 bg-background">
           {selectionResult && selectionResult.length > 0 && (
             <div className="mb-6">
               <h3 className="text-sm font-semibold text-foreground mb-3">
@@ -313,7 +294,6 @@ export default function ImageGeneratorPage() {
             </div>
           )}
 
-          {/* Skeletons during generation */}
           {generateMutation.isPending && (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {[1, 2].map((i) => (
@@ -322,15 +302,11 @@ export default function ImageGeneratorPage() {
             </div>
           )}
 
-          {/* Image history */}
           {!generateMutation.isPending &&
             (imagesLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <Skeleton
-                    key={i}
-                    className="w-full aspect-square rounded-2xl"
-                  />
+                  <Skeleton key={i} className="w-full aspect-square rounded-2xl" />
                 ))}
               </div>
             ) : generatedImages.length > 0 ? (
@@ -392,11 +368,7 @@ export default function ImageGeneratorPage() {
             ))}
         </div>
 
-        {/* Image detail dialog */}
-        <Dialog
-          open={!!selectedImage}
-          onOpenChange={() => setSelectedImage(null)}
-        >
+        <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
           <DialogContent className="max-w-3xl bg-card border-border rounded-2xl p-0 overflow-hidden">
             {selectedImage && (
               <>
@@ -467,6 +439,3 @@ export default function ImageGeneratorPage() {
     </DashboardLayout>
   );
 }
-
-
-

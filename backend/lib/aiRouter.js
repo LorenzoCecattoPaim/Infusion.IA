@@ -32,6 +32,8 @@ const IMAGE_AGENTS = new Set([
   "AGENTE_7_GERADOR_POSTS_IMAGEM",
   "AGENTE_LOGO_PROMPT_BUILDER",
 ]);
+const AI_TIMEOUT_MS = 15000;
+const responseCache = new Map();
 
 function getClient() {
   const apiKey = process.env.AI_API_KEY;
@@ -156,6 +158,28 @@ function trackUsage({ userId, model, usage }) {
   );
 }
 
+function cloneCached(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function buildRequestCacheKey({
+  model,
+  systemPrompt,
+  messages,
+  requireJson,
+  temperature,
+  maxTokens,
+}) {
+  return JSON.stringify({
+    model,
+    systemPrompt,
+    messages,
+    requireJson,
+    temperature,
+    maxTokens,
+  });
+}
+
 async function callModel({
   client,
   model,
@@ -165,6 +189,19 @@ async function callModel({
   temperature,
   maxTokens,
 }) {
+  const cacheKey = buildRequestCacheKey({
+    model,
+    systemPrompt,
+    messages,
+    requireJson,
+    temperature,
+    maxTokens,
+  });
+  const cached = responseCache.get(cacheKey);
+  if (cached) {
+    return cloneCached(cached);
+  }
+
   const input = [
     ...(systemPrompt
       ? [{ role: "system", content: systemPrompt }]
@@ -172,21 +209,41 @@ async function callModel({
     ...messages,
   ];
 
-  const response = await client.responses.create({
-    model,
-    input,
-    temperature,
-    max_output_tokens: maxTokens,
-    ...(requireJson
-      ? {
-          text: {
-            format: {
-              type: "json_object"
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+
+  let response;
+  try {
+    response = await client.responses.create(
+      {
+        model,
+        input,
+        temperature,
+        max_output_tokens: maxTokens,
+        ...(requireJson
+          ? {
+              text: {
+                format: {
+                  type: "json_object",
+                },
+              },
             }
-          }
-        }
-      : {}),
-  });
+          : {}),
+      },
+      {
+        signal: controller.signal,
+      }
+    );
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      const timeoutError = new Error("AI_TIMEOUT");
+      timeoutError.code = "AI_TIMEOUT";
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   // 🔥 EXTRAÇÃO CORRETA
   let content = "";
@@ -200,10 +257,13 @@ async function callModel({
       .join("");
   }
 
-  return {
+  const result = {
     content,
     usage: response?.usage,
   };
+
+  responseCache.set(cacheKey, result);
+  return cloneCached(result);
 }
 
 export async function executarAgente({
@@ -212,7 +272,7 @@ export async function executarAgente({
   messages,
   requireJson = false,
   temperature = 0.7,
-  maxTokens = 4096,
+  maxTokens = 2048,
   preferHighQuality = false,
   userId = null,
 }) {

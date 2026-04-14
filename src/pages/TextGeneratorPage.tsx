@@ -11,6 +11,7 @@ import { useCredits } from "@/hooks/useCredits";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CREDIT_COSTS } from "@/lib/credits";
+import { useDebouncedAction } from "@/hooks/useDebouncedAction";
 
 const CONTENT_TYPES = [
   { value: "Legenda Instagram", label: "Legenda Instagram", limit: 2200 },
@@ -41,6 +42,7 @@ export default function TextGeneratorPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GenerateTextResponse | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const runDebounced = useDebouncedAction(500);
 
   const limit = CONTENT_TYPES.find((c) => c.value === tipo)?.limit ?? 0;
 
@@ -82,8 +84,10 @@ export default function TextGeneratorPage() {
         },
         ...prev,
       ].slice(0, 8));
-      queryClient.invalidateQueries({ queryKey: ["credits"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["credits"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] }),
+      ]);
       toast.success("Texto gerado com sucesso.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao gerar texto.");
@@ -203,7 +207,7 @@ export default function TextGeneratorPage() {
               </div>
 
               <Button
-                onClick={() => handleGenerate()}
+                onClick={() => runDebounced(() => void handleGenerate())}
                 className="w-full gradient-primary text-primary-foreground hover:opacity-90"
                 disabled={loading}
               >
@@ -240,7 +244,9 @@ export default function TextGeneratorPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => handleGenerate({ variation: true })}
+                    onClick={() =>
+                      runDebounced(() => void handleGenerate({ variation: true }))
+                    }
                     disabled={loading}
                   >
                     <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Gerar variação
@@ -248,7 +254,9 @@ export default function TextGeneratorPage() {
                   <Button
                     size="sm"
                     className="gradient-primary text-primary-foreground hover:opacity-90"
-                    onClick={() => handleGenerate({ refine: true })}
+                    onClick={() =>
+                      runDebounced(() => void handleGenerate({ refine: true }))
+                    }
                     disabled={loading}
                   >
                     Refinar resultado

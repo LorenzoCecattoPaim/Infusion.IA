@@ -1,4 +1,67 @@
-﻿import { fetchFunctions } from "@/lib/apiBase";
+import { fetchFunctions } from "@/lib/apiBase";
+
+const AI_REQUEST_TIMEOUT_MS = 15000;
+const AI_TIMEOUT_MESSAGE =
+  "A IA está demorando mais do que o esperado. Tente novamente em instantes.";
+const aiResponseCache = new Map<string, string>();
+
+function buildCacheKey(path: string, payload: unknown) {
+  return `${path}:${JSON.stringify(payload)}`;
+}
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+async function parseErrorResponse(res: Response, fallbackMessage: string) {
+  const err = await res.json().catch(() => ({}));
+  if (res.status === 402) {
+    throw new Error("Créditos insuficientes.");
+  }
+  throw new Error(err.error || fallbackMessage);
+}
+
+async function requestAi<T>(
+  path: string,
+  payload: unknown,
+  fallbackMessage: string
+): Promise<T> {
+  const cacheKey = buildCacheKey(path, payload);
+  const cached = aiResponseCache.get(cacheKey);
+
+  if (cached) {
+    return cloneJson(JSON.parse(cached) as T);
+  }
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+
+  try {
+    const res = await fetchFunctions(path, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=UTF-8",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      await parseErrorResponse(res, fallbackMessage);
+    }
+
+    const data = (await res.json()) as T;
+    aiResponseCache.set(cacheKey, JSON.stringify(data));
+    return cloneJson(data);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(AI_TIMEOUT_MESSAGE);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
 
 export interface GeneratePostsPayload {
   canal?: string;
@@ -37,6 +100,30 @@ export interface GenerateTextResponse {
   prompt?: string | null;
 }
 
+export interface LogoGeneratorMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface LogoGeneratorPayload {
+  messages: LogoGeneratorMessage[];
+  action?: string;
+  selectedPrompt?: string;
+}
+
+export interface LogoGeneratorItem {
+  url: string;
+  description: string;
+  prompt: string;
+}
+
+export interface LogoGeneratorResponse {
+  message: string;
+  logos: LogoGeneratorItem[];
+  credits?: number;
+  phase: "collecting_inputs" | "generating" | "done";
+}
+
 export async function generatePosts(
   payload: GeneratePostsPayload
 ): Promise<GeneratePostsResponse> {
@@ -54,47 +141,30 @@ IMPORTANT RULES:
 `,
     };
 
-    const res = await fetchFunctions("/generate-posts", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json; charset=UTF-8",
-      },
-      body: JSON.stringify(enhancedPayload),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      if (res.status === 402) throw new Error("Créditos insuficientes.");
-      throw new Error(err.error || "Erro ao gerar posts.");
-    }
-
-    return res.json();
+    return await requestAi<GeneratePostsResponse>(
+      "/generate-posts",
+      enhancedPayload,
+      "Erro ao gerar posts."
+    );
   } catch (error) {
     console.error("[generatePosts] error:", error);
     throw error;
   }
 }
 
-
 export async function generateText(
   payload: GenerateTextPayload
 ): Promise<GenerateTextResponse> {
-  const res = await fetchFunctions("/generate-text", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json; charset=UTF-8",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    console.error("[AI] generateText error", { status: res.status, err });
-    if (res.status === 402) throw new Error("Créditos insuficientes.");
-    throw new Error(err.error || "Erro ao gerar texto.");
+  try {
+    return await requestAi<GenerateTextResponse>(
+      "/generate-text",
+      payload,
+      "Erro ao gerar texto."
+    );
+  } catch (error) {
+    console.error("[AI] generateText error", error);
+    throw error;
   }
-
-  return res.json();
 }
 
 export interface GeneratePostPromptPayload {
@@ -112,26 +182,28 @@ export interface GeneratePostPromptResponse {
   observacoes?: string;
 }
 
+export interface GenerateImageItem {
+  id?: string | number;
+  url: string;
+  prompt?: string;
+  optimized_prompt?: string | null;
+  negative_prompt?: string | null;
+}
+
+export interface GenerateImageResponse {
+  images: GenerateImageItem[];
+  credits?: number;
+}
+
 export async function generatePostPrompt(
   payload: GeneratePostPromptPayload
 ): Promise<GeneratePostPromptResponse> {
-  const res = await fetchFunctions("/generate-post-prompt", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json; charset=UTF-8",
-    },
-    body: JSON.stringify(payload),
-  });
+  const data = await requestAi<GeneratePostPromptResponse>(
+    "/generate-post-prompt",
+    payload,
+    "Erro ao gerar prompt do post."
+  );
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    console.error("[AI] generatePostPrompt error", { status: res.status, err });
-    throw new Error(err.error || "Erro ao gerar prompt do post.");
-  }
-
-  const data = await res.json();
-
-  // 🔥 PÓS-PROCESSAMENTO (QUALIDADE DA IMAGEM)
   if (data.prompt) {
     data.prompt = `${data.prompt},
 professional advertising poster,
@@ -157,21 +229,30 @@ export async function generateImage(payload: {
   format?: string;
   style?: string | null;
   incluir_espaco_logo?: boolean;
-}) {
-  const res = await fetchFunctions("/generate-image", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json; charset=UTF-8",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    console.error("[AI] generateImage error", { status: res.status, err });
-    if (res.status === 402) throw new Error("Créditos insuficientes.");
-    throw new Error(err.error || "Erro ao gerar imagem.");
+}): Promise<GenerateImageResponse> {
+  try {
+    return await requestAi<GenerateImageResponse>(
+      "/generate-image",
+      payload,
+      "Erro ao gerar imagem."
+    );
+  } catch (error) {
+    console.error("[AI] generateImage error", error);
+    throw error;
   }
+}
 
-  return res.json();
+export async function callLogoGenerator(
+  payload: LogoGeneratorPayload
+): Promise<LogoGeneratorResponse> {
+  try {
+    return await requestAi<LogoGeneratorResponse>(
+      "/logo-generator",
+      payload,
+      "Erro ao processar a geração de logos."
+    );
+  } catch (error) {
+    console.error("[AI] logoGenerator error", error);
+    throw error;
+  }
 }

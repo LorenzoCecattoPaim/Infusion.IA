@@ -125,6 +125,9 @@ const CREDIT_COSTS = {
   text: 5,
   image: 15,
 };
+const AI_TIMEOUT_MS = 15000;
+const AI_TIMEOUT_USER_MESSAGE =
+  "A IA está demorando mais do que o esperado. Tente novamente em instantes.";
 
 const PLAN_CATALOG = {
   monthly: [
@@ -399,6 +402,30 @@ function buildPlaceholderImage(label = "Imagem") {
     "</svg>",
   ].join("");
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+function isAiTimeoutError(error) {
+  return error?.code === "AI_TIMEOUT" || error?.message === "AI_TIMEOUT";
+}
+
+async function generateImageWithTimeout(params) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+
+  try {
+    return await openai.images.generate(params, {
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      const timeoutError = new Error("AI_TIMEOUT");
+      timeoutError.code = "AI_TIMEOUT";
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function withMessagesTable(handler) {
@@ -868,18 +895,19 @@ router.post("/ai-chat", requireAuth, async (req, res) => {
     }
 
     const supabase = getSupabase();
-    const creditResult = await consumeCredits({
-      supabase,
-      userId: req.user.id,
-      amount: CREDIT_COSTS.text,
-      reason: "ai-chat",
-    });
+    const [creditResult, profile] = await Promise.all([
+      consumeCredits({
+        supabase,
+        userId: req.user.id,
+        amount: CREDIT_COSTS.text,
+        reason: "ai-chat",
+      }),
+      loadBusinessProfile(supabase, req.user.id),
+    ]);
 
     if (!creditResult.ok) {
       return sendInsufficientCredits(res, creditResult.credits);
     }
-
-    const profile = await loadBusinessProfile(supabase, req.user.id);
 
     const systemPrompt = renderBusinessPrompt(
       AGENTE_1_CONSULTOR_MARKETING,
@@ -917,7 +945,11 @@ router.post("/ai-chat", requireAuth, async (req, res) => {
     });
   } catch (error) {
     console.error("[AI-CHAT]", error);
-    return sendError(res, 500, "Erro interno");
+    return sendError(
+      res,
+      isAiTimeoutError(error) ? 504 : 500,
+      isAiTimeoutError(error) ? AI_TIMEOUT_USER_MESSAGE : "Erro interno"
+    );
   }
 });
 
@@ -959,24 +991,25 @@ router.post("/logo-generator", requireAuth, async (req, res) => {
       null
     );
 
-    const assistantMessage = await executarAgente({
-      agente: "AGENTE_2_DESIGNER_LOGO",
-      systemPrompt: designerPrompt,
-      messages: normalizedMessages,
-      maxTokens: 1200,
-      temperature: 0.7,
-      debugTag: "logo-generator",
-    });
-
-    const readyCheck = await executarAgente({
-      agente: "AGENTE_LOGO_READY_CHECK",
-      systemPrompt: AGENTE_LOGO_READY_CHECK,
-      messages: normalizedMessages,
-      requireJson: true,
-      maxTokens: 400,
-      temperature: 0.1,
-      debugTag: "logo-ready-check",
-    });
+    const [assistantMessage, readyCheck] = await Promise.all([
+      executarAgente({
+        agente: "AGENTE_2_DESIGNER_LOGO",
+        systemPrompt: designerPrompt,
+        messages: normalizedMessages,
+        maxTokens: 700,
+        temperature: 0.7,
+        debugTag: "logo-generator",
+      }),
+      executarAgente({
+        agente: "AGENTE_LOGO_READY_CHECK",
+        systemPrompt: AGENTE_LOGO_READY_CHECK,
+        messages: normalizedMessages,
+        requireJson: true,
+        maxTokens: 180,
+        temperature: 0.1,
+        debugTag: "logo-ready-check",
+      }),
+    ]);
 
     const readiness = safeParseJSON(readyCheck, { ready: false, missing: [] });
     const shouldGenerate =
@@ -1014,7 +1047,7 @@ router.post("/logo-generator", requireAuth, async (req, res) => {
       systemPrompt: promptBuilderPrompt,
       messages: normalizedMessages,
       requireJson: true,
-      maxTokens: 1200,
+      maxTokens: 700,
       temperature: 0.6,
       debugTag: "logo-prompts",
     });
@@ -1023,34 +1056,33 @@ router.post("/logo-generator", requireAuth, async (req, res) => {
     const prompts = Array.isArray(parsed?.prompts) ? parsed.prompts : [];
     const descriptions = Array.isArray(parsed?.descriptions) ? parsed.descriptions : [];
     const promptsToUse = prompts.slice(0, 3);
-    const logos = [];
+    const logos = await Promise.all(
+      promptsToUse.map(async (rawPrompt, index) => {
+        const { optimizedPrompt } = buildImagePrompt({
+          prompt: rawPrompt,
+          quality: "premium",
+          businessProfile: profile,
+          purpose: "logo",
+        });
 
-    for (let i = 0; i < promptsToUse.length; i += 1) {
-      const rawPrompt = promptsToUse[i];
-      const { optimizedPrompt } = buildImagePrompt({
-        prompt: rawPrompt,
-        quality: "premium",
-        businessProfile: profile,
-        purpose: "logo",
-      });
+        const result = await generateImageWithTimeout({
+          model: "gpt-image-1",
+          prompt: optimizedPrompt,
+          size: "1024x1024",
+        });
 
-      const result = await openai.images.generate({
-        model: "gpt-image-1",
-        prompt: optimizedPrompt,
-        size: "1024x1024",
-      });
+        const imageBase64 = result.data?.[0]?.b64_json;
+        const imageUrl = imageBase64
+          ? `data:image/png;base64,${imageBase64}`
+          : buildPlaceholderImage(`Logo ${index + 1}`);
 
-      const imageBase64 = result.data?.[0]?.b64_json;
-      const imageUrl = imageBase64
-        ? `data:image/png;base64,${imageBase64}`
-        : buildPlaceholderImage(`Logo ${i + 1}`);
-
-      logos.push({
-        url: imageUrl,
-        description: descriptions[i] || "",
-        prompt: optimizedPrompt,
-      });
-    }
+        return {
+          url: imageUrl,
+          description: descriptions[index] || "",
+          prompt: optimizedPrompt,
+        };
+      })
+    );
 
     if (logos.length) {
       try {
@@ -1077,7 +1109,11 @@ router.post("/logo-generator", requireAuth, async (req, res) => {
     });
   } catch (error) {
     console.error("[LOGO]", error);
-    return sendError(res, 500, "Erro ao gerar logo.");
+    return sendError(
+      res,
+      isAiTimeoutError(error) ? 504 : 500,
+      isAiTimeoutError(error) ? AI_TIMEOUT_USER_MESSAGE : "Erro ao gerar logo."
+    );
   }
 });
 
@@ -1100,12 +1136,15 @@ router.post("/generate-text", requireAuth, async (req, res) => {
     }
 
     const supabase = getSupabase();
-    const creditResult = await consumeCredits({
-      supabase,
-      userId: req.user.id,
-      amount: CREDIT_COSTS.text,
-      reason: "generate-text",
-    });
+    const [creditResult, profile] = await Promise.all([
+      consumeCredits({
+        supabase,
+        userId: req.user.id,
+        amount: CREDIT_COSTS.text,
+        reason: "generate-text",
+      }),
+      loadBusinessProfile(supabase, req.user.id),
+    ]);
 
     if (!creditResult.ok) {
       return sendInsufficientCredits(res, creditResult.credits);
@@ -1128,7 +1167,6 @@ router.post("/generate-text", requireAuth, async (req, res) => {
       .filter(Boolean)
       .join("\n");
 
-    const profile = await loadBusinessProfile(supabase, req.user.id);
     const systemPrompt = renderBusinessPrompt(
       AGENTE_6_GERADOR_TEXTO,
       profile,
@@ -1141,7 +1179,7 @@ router.post("/generate-text", requireAuth, async (req, res) => {
       messages: [{ role: "user", content: basePrompt }],
       requireJson: true,
       temperature: 0.7,
-      maxTokens: 1200,
+      maxTokens: 700,
       preferHighQuality: true,
       debugTag: "generate-text",
     });
@@ -1161,7 +1199,11 @@ router.post("/generate-text", requireAuth, async (req, res) => {
     return sendSuccess(res, { ...parsed, credits: creditResult.credits });
   } catch (error) {
     console.error("[GENERATE-TEXT]", error);
-    return sendError(res, 500, "Erro ao gerar texto.");
+    return sendError(
+      res,
+      isAiTimeoutError(error) ? 504 : 500,
+      isAiTimeoutError(error) ? AI_TIMEOUT_USER_MESSAGE : "Erro ao gerar texto."
+    );
   }
 });
 
@@ -1176,12 +1218,15 @@ router.post("/generate-posts", requireAuth, async (req, res) => {
     }
 
     const supabase = getSupabase();
-    const creditResult = await consumeCredits({
-      supabase,
-      userId: req.user.id,
-      amount: CREDIT_COSTS.text,
-      reason: "generate-posts",
-    });
+    const [creditResult, profile] = await Promise.all([
+      consumeCredits({
+        supabase,
+        userId: req.user.id,
+        amount: CREDIT_COSTS.text,
+        reason: "generate-posts",
+      }),
+      loadBusinessProfile(supabase, req.user.id),
+    ]);
 
     if (!creditResult.ok) {
       return sendInsufficientCredits(res, creditResult.credits);
@@ -1197,7 +1242,6 @@ router.post("/generate-posts", requireAuth, async (req, res) => {
       .filter(Boolean)
       .join("\n");
 
-    const profile = await loadBusinessProfile(supabase, req.user.id);
     const systemPrompt = renderBusinessPrompt(
       AGENTE_3_GERADOR_POSTS,
       profile,
@@ -1210,7 +1254,7 @@ router.post("/generate-posts", requireAuth, async (req, res) => {
       messages: [{ role: "user", content: payload }],
       requireJson: true,
       temperature: 0.7,
-      maxTokens: 1400,
+      maxTokens: 900,
       preferHighQuality: true,
       debugTag: "generate-posts",
     });
@@ -1219,7 +1263,11 @@ router.post("/generate-posts", requireAuth, async (req, res) => {
     return sendSuccess(res, { ...parsed, credits: creditResult.credits });
   } catch (error) {
     console.error("[GENERATE-POSTS]", error);
-    return sendError(res, 500, "Erro ao gerar posts.");
+    return sendError(
+      res,
+      isAiTimeoutError(error) ? 504 : 500,
+      isAiTimeoutError(error) ? AI_TIMEOUT_USER_MESSAGE : "Erro ao gerar posts."
+    );
   }
 });
 
@@ -1241,7 +1289,7 @@ router.post("/generate-post-prompt", requireAuth, async (req, res) => {
     }
 
     const supabase = getSupabase();
-    
+
     const prompt = [
       `Tipo de post: ${tipo_post}`,
       `Descrição: ${descricao}`,
@@ -1266,7 +1314,7 @@ router.post("/generate-post-prompt", requireAuth, async (req, res) => {
       messages: [{ role: "user", content: prompt }],
       requireJson: true,
       temperature: 0.6,
-      maxTokens: 1200,
+      maxTokens: 500,
       preferHighQuality: true,
       debugTag: "generate-post-prompt",
     });
@@ -1280,7 +1328,11 @@ router.post("/generate-post-prompt", requireAuth, async (req, res) => {
     return sendSuccess(res, parsed);
   } catch (error) {
     console.error("[POST-PROMPT]", error);
-    return sendError(res, 500, "Erro ao gerar prompt do post.");
+    return sendError(
+      res,
+      isAiTimeoutError(error) ? 504 : 500,
+      isAiTimeoutError(error) ? AI_TIMEOUT_USER_MESSAGE : "Erro ao gerar prompt do post."
+    );
   }
 });
 
@@ -1304,15 +1356,15 @@ router.post("/generate-image", requireAuth, async (req, res) => {
     if (!prompt) return sendError(res, 400, "prompt required");
 
     const supabase = getSupabase();
-    const profile = await loadBusinessProfile(supabase, req.user.id);
-
-    // 💳 Consumo de créditos
-    const creditResult = await consumeCredits({
-      supabase,
-      userId: req.user.id,
-      amount: CREDIT_COSTS.image,
-      reason: "generate-image",
-    });
+    const [profile, creditResult] = await Promise.all([
+      loadBusinessProfile(supabase, req.user.id),
+      consumeCredits({
+        supabase,
+        userId: req.user.id,
+        amount: CREDIT_COSTS.image,
+        reason: "generate-image",
+      }),
+    ]);
 
     if (!creditResult.ok) {
       return sendInsufficientCredits(res, creditResult.credits);
@@ -1332,7 +1384,7 @@ router.post("/generate-image", requireAuth, async (req, res) => {
     console.log("[IMAGE] Gerando imagem com prompt:", optimizedPrompt);
 
     // 🎨 Gerar imagem
-    const result = await openai.images.generate({
+    const result = await generateImageWithTimeout({
       model: "gpt-image-1",
       prompt: optimizedPrompt,
       size: "1024x1024",
@@ -1409,7 +1461,11 @@ router.post("/generate-image", requireAuth, async (req, res) => {
 
   } catch (error) {
     console.error("[IMAGE ERROR]", error);
-    return sendError(res, 500, "Erro ao gerar imagem");
+    return sendError(
+      res,
+      isAiTimeoutError(error) ? 504 : 500,
+      isAiTimeoutError(error) ? AI_TIMEOUT_USER_MESSAGE : "Erro ao gerar imagem"
+    );
   }
 });
 

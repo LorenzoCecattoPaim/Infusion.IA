@@ -15,12 +15,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import DashboardLayout from "@/components/DashboardLayout";
-import { generateImage, generatePostPrompt } from "@/services/ai";
+import {
+  generateImage,
+  generatePostPrompt,
+  type GenerateImageItem,
+} from "@/services/ai";
 import { useCredits } from "@/hooks/useCredits";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { GeneratedImage } from "@/hooks/useGeneratedImages";
 import { CREDIT_COSTS } from "@/lib/credits";
+import { useDebouncedAction } from "@/hooks/useDebouncedAction";
 
 const TIPOS = ["Produto", "Promocional", "Institucional", "Datas comemorativas"];
 const FORMATOS = [
@@ -51,12 +55,13 @@ export default function PostGeneratorPage() {
   const [estilo, setEstilo] = useState(ESTILOS[0]);
   const [incluirEspacoLogo, setIncluirEspacoLogo] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [images, setImages] = useState<GeneratedImage[]>([]);
+  const [images, setImages] = useState<GenerateImageItem[]>([]);
   const [lastPrompt, setLastPrompt] = useState("");
   const [promptDraft, setPromptDraft] = useState("");
   const [questions, setQuestions] = useState<string[]>([]);
   const [history, setHistory] = useState<HistoryImage[]>([]);
   const [promptNotes, setPromptNotes] = useState<string | null>(null);
+  const runDebounced = useDebouncedAction(500);
 
   useEffect(() => {
     const savedLogo = localStorage.getItem("infusion_post_logo");
@@ -139,7 +144,7 @@ export default function PostGeneratorPage() {
 
       setImages(result.images || []);
       setHistory((prev) => [
-        ...(result.images || []).map((img: GeneratedImage) => ({
+        ...(result.images || []).map((img: GenerateImageItem) => ({
           id: String(img.id || Date.now()),
           url: img.url,
           prompt: promptToUse || "",
@@ -148,8 +153,10 @@ export default function PostGeneratorPage() {
         ...prev,
       ].slice(0, 8));
 
-      queryClient.invalidateQueries({ queryKey: ["credits"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["credits"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] }),
+      ]);
       toast.success("Post gerado com sucesso.");
     } catch (err) {
       console.error("[AI] Post generator error", err);
@@ -324,7 +331,7 @@ export default function PostGeneratorPage() {
               </div>
 
               <Button
-                onClick={() => handleGenerate()}
+                onClick={() => runDebounced(() => void handleGenerate())}
                 className="w-full gradient-primary text-primary-foreground hover:opacity-90"
                 disabled={loading}
               >
@@ -352,7 +359,14 @@ export default function PostGeneratorPage() {
                   <Button size="sm" variant="outline" onClick={() => handleCopy(lastPrompt)}>
                     <Copy className="h-3.5 w-3.5 mr-1.5" /> Copiar
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleGenerate(lastPrompt)} disabled={loading}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      runDebounced(() => void handleGenerate(lastPrompt))
+                    }
+                    disabled={loading}
+                  >
                     <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Gerar variação
                   </Button>
                 </div>
@@ -380,7 +394,7 @@ export default function PostGeneratorPage() {
               ) : (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {images.map((img) => (
+                    {images.map((img, index) => (
                       <div key={img.id} className="rounded-2xl overflow-hidden border border-border">
                         <img
                           src={img.url}
@@ -392,7 +406,7 @@ export default function PostGeneratorPage() {
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => handleDownload(img.url, img.id)}
+                            onClick={() => handleDownload(img.url, img.id || index)}
                           >
                             <Download className="h-4 w-4" />
                           </Button>
@@ -415,7 +429,9 @@ export default function PostGeneratorPage() {
                         className="min-h-[110px] bg-background border-border"
                       />
                       <Button
-                        onClick={() => handleGenerate(promptDraft)}
+                        onClick={() =>
+                          runDebounced(() => void handleGenerate(promptDraft))
+                        }
                         className="gradient-primary text-primary-foreground hover:opacity-90"
                         disabled={loading || !promptDraft.trim()}
                       >

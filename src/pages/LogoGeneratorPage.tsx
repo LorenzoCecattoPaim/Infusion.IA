@@ -11,11 +11,12 @@ import {
 } from "@/components/ui/dialog";
 import DashboardLayout from "@/components/DashboardLayout";
 import ChatMessage from "@/components/ChatMessage";
-import { fetchFunctions } from "@/lib/apiBase";
 import { useCredits } from "@/hooks/useCredits";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CREDIT_COSTS } from "@/lib/credits";
+import { callLogoGenerator } from "@/services/ai";
+import { useDebouncedAction } from "@/hooks/useDebouncedAction";
 
 interface Message {
   id: string;
@@ -33,7 +34,7 @@ interface Logo {
 type LogoPhase = "collecting_inputs" | "generating" | "done";
 
 const PHASE_LABELS: Record<LogoPhase, string> = {
-  collecting_inputs: "Coletando informações da sua marca",
+  collecting_inputs: "Coletando informacoes da sua marca",
   generating: "Gerando logos personalizados",
   done: "Logos prontos para escolha",
 };
@@ -50,6 +51,7 @@ export default function LogoGeneratorPage() {
   const queryClient = useQueryClient();
   const { credits } = useCredits();
   const imageCost = CREDIT_COSTS.image;
+  const runDebounced = useDebouncedAction(500);
 
   useEffect(() => {
     setMessages([
@@ -57,7 +59,7 @@ export default function LogoGeneratorPage() {
         id: "welcome",
         role: "assistant",
         content:
-          "Olá! Sou seu designer de logo com IA. Vou criar um logo incrível para a sua marca!\n\nPara começar, preciso de algumas informações:\n\n**Qual é o nome completo da sua marca/empresa?**",
+          "Ola! Sou seu designer de logo com IA. Vou criar um logo incrivel para a sua marca!\n\nPara comecar, preciso de algumas informacoes:\n\n**Qual e o nome completo da sua marca/empresa?**",
         timestamp: new Date(),
       },
     ]);
@@ -74,34 +76,20 @@ export default function LogoGeneratorPage() {
     const action = typeof payload.action === "string" ? payload.action : null;
     const requiresCredits =
       action === "generate_logos" || action === "generate_variations";
+
     if (requiresCredits && credits < imageCost) {
       throw new Error(
-        `Créditos insuficientes. Necessário: ${imageCost}, disponível: ${credits}`
+        `Creditos insuficientes. Necessario: ${imageCost}, disponivel: ${credits}`
       );
     }
-    const res = await fetchFunctions("/logo-generator", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json; charset=UTF-8",
-      },
-      body: JSON.stringify(payload),
-    });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.error("[AI] Logo generator response error", { status: res.status, err });
-      if (res.status === 402) {
-        throw new Error("Créditos insuficientes.");
-      }
-      throw new Error(err.error || "Erro ao processar.");
-    }
-
-    return res.json();
+    return callLogoGenerator(payload as never);
   };
 
   const handleSend = async () => {
     const userMessage = input.trim();
     if (!userMessage || loading) return;
+
     setInput("");
 
     const newMsg: Message = {
@@ -110,6 +98,7 @@ export default function LogoGeneratorPage() {
       content: userMessage,
       timestamp: new Date(),
     };
+
     setMessages((prev) => [...prev, newMsg]);
     setLoading(true);
     setLogoPhase("collecting_inputs");
@@ -125,7 +114,7 @@ export default function LogoGeneratorPage() {
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now().toString() + "-ai",
+          id: `${Date.now()}-ai`,
           role: "assistant",
           content: data.message,
           timestamp: new Date(),
@@ -140,11 +129,13 @@ export default function LogoGeneratorPage() {
         setLogoPhase("collecting_inputs");
       }
 
-      queryClient.invalidateQueries({ queryKey: ["credits"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["credits"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] }),
+      ]);
     } catch (err) {
       console.error("[AI] Logo generator error", err);
-      toast.error(err instanceof Error ? err.message : "Erro de conexão.");
+      toast.error(err instanceof Error ? err.message : "Erro de conexao.");
     } finally {
       setLoading(false);
     }
@@ -152,12 +143,14 @@ export default function LogoGeneratorPage() {
 
   const handleGenerateNew = async () => {
     if (loading) return;
+
     const actionMsg: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: "Gerar novas opções",
+      content: "Gerar novas opcoes",
       timestamp: new Date(),
     };
+
     setMessages((prev) => [...prev, actionMsg]);
     setLoading(true);
     setLogoPhase("generating");
@@ -167,19 +160,22 @@ export default function LogoGeneratorPage() {
         role: m.role,
         content: m.content,
       }));
+
       const data = await callLogoApi({
         messages: allMessages,
         action: "generate_logos",
       });
+
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now().toString() + "-ai",
+          id: `${Date.now()}-ai`,
           role: "assistant",
           content: data.message,
           timestamp: new Date(),
         },
       ]);
+
       if (data.logos?.length) {
         setLogos(data.logos);
         setLogoPhase("done");
@@ -187,8 +183,11 @@ export default function LogoGeneratorPage() {
         setLogos([]);
         setLogoPhase("collecting_inputs");
       }
-      queryClient.invalidateQueries({ queryKey: ["credits"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["credits"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] }),
+      ]);
     } catch (err) {
       console.error("[AI] Logo generator error", err);
       toast.error(err instanceof Error ? err.message : "Erro ao gerar logos.");
@@ -208,7 +207,7 @@ export default function LogoGeneratorPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `logo-infusion-ia.png`;
+      a.download = "logo-infusion-ia.png";
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -231,7 +230,7 @@ export default function LogoGeneratorPage() {
             </p>
           </div>
           <Badge variant="outline" className="border-border text-muted-foreground">
-            <Zap className="h-3 w-3 mr-1" /> {credits} créditos
+            <Zap className="h-3 w-3 mr-1" /> {credits} creditos
           </Badge>
         </header>
 
@@ -248,19 +247,20 @@ export default function LogoGeneratorPage() {
           {logoPhase === "done" && logos.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">Opções geradas</p>
+                <p className="text-xs text-muted-foreground">Opcoes geradas</p>
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={handleGenerateNew}
+                  onClick={() => runDebounced(() => void handleGenerateNew())}
                   disabled={loading}
                 >
-                  <RefreshCw className="h-3.5 w-3.5 mr-2" /> Gerar novas opções
+                  <RefreshCw className="h-3.5 w-3.5 mr-2" /> Gerar novas opcoes
                 </Button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {logos.map((logo, i) => {
                   const isSelected = selectedLogo?.url === logo.url;
+
                   return (
                     <div
                       key={i}
@@ -335,10 +335,10 @@ export default function LogoGeneratorPage() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  handleSend();
+                  runDebounced(() => void handleSend());
                 }
               }}
-              placeholder="Responda às perguntas do designer..."
+              placeholder="Responda as perguntas do designer..."
               className="min-h-[44px] max-h-32 resize-none bg-secondary border-border text-foreground placeholder:text-muted-foreground"
               rows={1}
               disabled={loading}
@@ -346,14 +346,14 @@ export default function LogoGeneratorPage() {
             <Button
               size="icon"
               className="gradient-primary shrink-0 h-11 w-11 hover:opacity-90"
-              onClick={handleSend}
+              onClick={() => runDebounced(() => void handleSend())}
               disabled={!input.trim() || loading}
             >
               <Send className="h-4 w-4 text-primary-foreground" />
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1.5">
-            Cada geração consome {imageCost} créditos • Infusion.IA Logo Creator
+            Cada geracao consome {imageCost} creditos - Infusion.IA Logo Creator
           </p>
         </div>
 
@@ -397,16 +397,3 @@ export default function LogoGeneratorPage() {
     </DashboardLayout>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
