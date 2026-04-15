@@ -30,6 +30,11 @@ function createInfinitePayWebhookHandler({
       const payload = Buffer.isBuffer(rawBody)
         ? JSON.parse(rawBody.toString())
         : rawBody || {};
+      const transactionNsu =
+        payload?.transaction_nsu ||
+        payload?.transactionNsu ||
+        payload?.transaction_id ||
+        null;
 
       console.log(
         JSON.stringify({
@@ -41,18 +46,17 @@ function createInfinitePayWebhookHandler({
         })
       );
 
+      if (!signature) {
+        console.warn("[WEBHOOK] webhook sem assinatura ativa");
+      }
+
       res.status(200).json({ success: true, message: null });
 
       setImmediate(async () => {
         try {
           const supabase = getSupabase();
-          const eventId =
-            payload?.transaction_nsu ||
-            payload?.invoice_slug ||
-            payload?.order_nsu;
-
-          if (await isReplay(supabase, eventId)) {
-            console.warn("[WEBHOOK] replay detectado", eventId);
+          if (transactionNsu && (await isReplay(supabase, transactionNsu))) {
+            console.warn("[WEBHOOK] replay detectado", transactionNsu);
             return;
           }
 

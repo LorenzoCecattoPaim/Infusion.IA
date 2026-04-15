@@ -49,10 +49,14 @@ function extractGatewayFields(payload) {
       payload?.merchant_order_id ||
       null,
     gatewayOrderId:
-      payload?.invoice_slug ||
-      payload?.invoiceSlug ||
+      payload?.orderNsu ||
+      payload?.orderNSU ||
       payload?.checkout_id ||
       payload?.checkoutId ||
+      null,
+    invoiceSlug:
+      payload?.invoice_slug ||
+      payload?.invoiceSlug ||
       null,
     transactionNsu:
       payload?.transaction_nsu ||

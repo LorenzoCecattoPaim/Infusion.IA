@@ -81,6 +81,7 @@ async function updateOrderStatus({
   orderId,
   status,
   gatewayOrderId,
+  invoiceSlug,
   gatewayPaymentUrl,
   transactionNsu,
   gatewayStatus,
@@ -94,6 +95,7 @@ async function updateOrderStatus({
     patch: {
       status,
       gateway_order_id: gatewayOrderId,
+      invoice_slug: invoiceSlug,
       gateway_payment_url: gatewayPaymentUrl,
       transaction_nsu: transactionNsu,
       gateway_status: gatewayStatus,
@@ -126,6 +128,27 @@ async function findByGatewayId({ supabase, gateway, gatewayOrderId }) {
 
   if (error) throw error;
   return data || null;
+}
+
+async function findByInvoiceSlug({ supabase, gateway, invoiceSlug }) {
+  if (!invoiceSlug) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from("payment_orders")
+      .select("*")
+      .eq("gateway", gateway)
+      .eq("invoice_slug", invoiceSlug)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data || null;
+  } catch (error) {
+    if (isMissingColumnError(error)) {
+      return findByGatewayId({ supabase, gateway, gatewayOrderId: invoiceSlug });
+    }
+    throw error;
+  }
 }
 
 async function findById({ supabase, orderId }) {
@@ -162,6 +185,7 @@ export {
   updateOrderStatus,
   markOrderCredited,
   findByGatewayId,
+  findByInvoiceSlug,
   findById,
   findByTransactionNsu,
   findByUserAndId,

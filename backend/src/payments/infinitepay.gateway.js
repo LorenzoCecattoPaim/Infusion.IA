@@ -16,7 +16,7 @@ class InfinitePayGateway {
 
   /**
    * @param {{ orderId: string, amountCents: number, credits: number, customer: object | null, appBaseUrl?: string }} param0
-   * @returns {Promise<{ paymentUrl: string, gatewayOrderId: string | null }>}
+   * @returns {Promise<{ paymentUrl: string, gatewayOrderId: string | null, invoiceSlug?: string | null, transactionNsu?: string | null, status?: string }>}
    */
   async createPaymentLink({ orderId, amountCents, credits, customer, appBaseUrl }) {
     const controller = new AbortController();
@@ -72,6 +72,23 @@ class InfinitePayGateway {
       console.log("🧾 Resposta InfinitePay:", body);
 
       const paymentUrl = body?.url || body?.payment_url || body?.checkout_url || null;
+      const orderNsu =
+        body?.order_nsu ||
+        body?.orderNsu ||
+        body?.orderNSU ||
+        payload.order_nsu ||
+        null;
+      const invoiceSlug =
+        body?.invoice_slug ||
+        body?.invoiceSlug ||
+        body?.slug ||
+        body?.invoice?.slug ||
+        null;
+      const transactionNsu =
+        body?.transaction_nsu ||
+        body?.transactionNsu ||
+        body?.transaction?.nsu ||
+        null;
 
       if (!paymentUrl) {
         throw new Error("Resposta inválida da InfinitePay: url não encontrada");
@@ -79,7 +96,10 @@ class InfinitePayGateway {
 
       return {
         paymentUrl,
-        gatewayOrderId: null,
+        gatewayOrderId: orderNsu,
+        invoiceSlug,
+        transactionNsu,
+        status: "pending",
       };
     } finally {
       clearTimeout(timeout);

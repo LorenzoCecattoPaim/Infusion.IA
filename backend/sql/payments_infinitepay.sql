@@ -11,6 +11,7 @@ create table if not exists payment_orders (
   credits integer not null,
   amount_cents integer not null,
   gateway_order_id text,
+  invoice_slug text,
   gateway_payment_url text,
   transaction_nsu text,
   gateway_status text,
@@ -25,6 +26,7 @@ create table if not exists payment_orders (
 
 alter table if exists payment_orders
   add column if not exists transaction_nsu text,
+  add column if not exists invoice_slug text,
   add column if not exists gateway_status text,
   add column if not exists paid_amount_cents integer,
   add column if not exists capture_method text,
@@ -45,6 +47,9 @@ create unique index if not exists payment_orders_transaction_nsu_key
 
 create index if not exists payment_orders_gateway_order_id_idx
   on payment_orders (gateway, gateway_order_id);
+
+create index if not exists payment_orders_invoice_slug_idx
+  on payment_orders (gateway, invoice_slug);
 
 create index if not exists payment_orders_user_status_idx
   on payment_orders (user_id, status);
