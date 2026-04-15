@@ -1,5 +1,6 @@
 ﻿import express from "express";
 import { Readable } from "node:stream";
+import { pathToFileURL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import {
   AGENTE_1_CONSULTOR_MARKETING,
@@ -31,7 +32,10 @@ import {
 } from "./src/payments/payment.service.js";
 import { createInfinitePayWebhookHandler } from "./src/payments/webhook.controller.js";
 import { buildRequireAuth } from "./src/auth/auth.middleware.js";
+import { loadProjectEnv } from "./src/config/env.js";
 import { toFile } from "openai";
+
+loadProjectEnv();
 
 const app = express();
 app.set("trust proxy", 1);
@@ -176,14 +180,17 @@ async function syncPlanCatalog() {
     if (error) {
       if (isMissingTableError(error)) {
         console.warn("[PLANS] tabela plans inexistente.");
-        return;
+        return false;
       }
       console.warn("[PLANS] falha ao sincronizar catálogo", error.message);
+      return false;
     } else {
       console.log("[PLANS] catálogo sincronizado");
+      return true;
     }
   } catch (error) {
     console.warn("[PLANS] sincronização ignorada", error?.message || error);
+    return false;
   }
 }
 
@@ -1101,13 +1108,47 @@ app.use((err, req, res, _next) => {
 });
 
 const port = Number(process.env.PORT || 10000);
-app.listen(port, () => console.log(`🚀 Backend rodando na porta ${port}`));
+let serverInstance = null;
 
-(async () => {
+async function syncStartupTasks() {
   try {
-    await syncPlanCatalog();
-    console.log("✅ Planos sincronizados");
+    const synced = await syncPlanCatalog();
+    if (synced) {
+      console.log("✅ Planos sincronizados");
+    }
   } catch (err) {
     console.error("❌ Falha ao sincronizar planos:", err);
   }
-})();
+}
+
+async function startServer() {
+  if (serverInstance) {
+    return serverInstance;
+  }
+
+  await syncStartupTasks();
+
+  serverInstance = await new Promise((resolve) => {
+    const server = app.listen(port, () => {
+      const address = server.address();
+      const activePort = typeof address === "object" && address ? address.port : port;
+      console.log(`🚀 Backend rodando na porta ${activePort}`);
+      resolve(server);
+    });
+  });
+
+  return serverInstance;
+}
+
+function isDirectExecution() {
+  return Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
+}
+
+if (isDirectExecution()) {
+  startServer().catch((error) => {
+    console.error("❌ Falha no startup do backend:", error);
+    process.exitCode = 1;
+  });
+}
+
+export { app, startServer, syncStartupTasks };

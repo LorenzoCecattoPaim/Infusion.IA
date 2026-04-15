@@ -1,13 +1,14 @@
 import "./payment.types.js";
 import {
   createOrder,
+  markOrderCredited,
   updateOrderStatus,
   findById,
   findByGatewayId,
   findByTransactionNsu,
   findByUserAndId,
 } from "./payment.repository.js";
-import { addCredits } from "./credits.service.js";
+import { addPaymentCredits } from "./credits.service.js";
 import { logPayment } from "./payment.logger.js";
 import {
   buildSyntheticVerifyPayload,
@@ -134,18 +135,6 @@ async function processWebhook({
     },
   });
 
-  if (order.status === "approved") {
-    logPayment({
-      event: "payment.already_processed",
-      gateway,
-      orderId: order.id,
-      userId: order.user_id,
-      status: "approved",
-    });
-
-    return { success: true, message: null };
-  }
-
   const updated = await updateOrderStatus({
     supabase,
     orderId: order.id,
@@ -159,6 +148,16 @@ async function processWebhook({
   });
 
   if (!updated) {
+    const refreshedOrder = await findById({ supabase, orderId: order.id });
+    if (refreshedOrder?.credited_at) {
+      logPayment({
+        event: "payment.already_processed",
+        gateway,
+        orderId: order.id,
+        userId: order.user_id,
+        status: refreshedOrder.status || normalizedStatus,
+      });
+    }
     return { success: true, message: null };
   }
 
@@ -180,11 +179,28 @@ async function processWebhook({
     return { success: true, message: null };
   }
 
-  const creditResult = await addCredits({
+  if (updated.credited_at) {
+    logPayment({
+      event: "payment.already_processed",
+      gateway,
+      orderId: order.id,
+      userId: order.user_id,
+      status: "approved",
+      amount: paidAmount,
+      metadata: {
+        rawStatus,
+        transactionNsu,
+      },
+    });
+
+    return { success: true, message: null };
+  }
+
+  const creditResult = await addPaymentCredits({
     supabase,
+    orderId: order.id,
     userId: order.user_id,
     amount: Number(order.credits || 0),
-    reason: "payment-approved",
   });
 
   if (!creditResult.ok) {
@@ -198,6 +214,12 @@ async function processWebhook({
         credits: order.credits,
       },
     });
+
+    return { success: false, message: "Falha ao creditar usuário" };
+  }
+
+  if (creditResult.applied) {
+    await markOrderCredited({ supabase, orderId: order.id });
   }
 
   logPayment({
@@ -212,6 +234,8 @@ async function processWebhook({
       transaction_nsu: transactionNsu,
       capture_method: captureMethod,
       rawStatus,
+      creditsApplied: creditResult.applied,
+      currentCredits: creditResult.credits,
     },
   });
 

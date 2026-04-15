@@ -105,6 +105,17 @@ async function updateOrderStatus({
   });
 }
 
+async function markOrderCredited({ supabase, orderId }) {
+  return applyOrderPatch({
+    supabase,
+    orderId,
+    patch: {
+      credited_at: new Date().toISOString(),
+    },
+    allowApprovedTransition: true,
+  });
+}
+
 async function findByGatewayId({ supabase, gateway, gatewayOrderId }) {
   const { data, error } = await supabase
     .from("payment_orders")
@@ -149,6 +160,7 @@ async function findByUserAndId({ supabase, userId, orderId }) {
 export {
   createOrder,
   updateOrderStatus,
+  markOrderCredited,
   findByGatewayId,
   findById,
   findByTransactionNsu,

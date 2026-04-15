@@ -10,7 +10,10 @@ with required_tables as (
     'generated_images',
     'generated_logos',
     'chat_conversations',
-    'chat_messages'
+    'chat_messages',
+    'payment_orders',
+    'webhook_events',
+    'payment_credit_ledger'
   ]) as table_name
 )
 select
