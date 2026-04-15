@@ -40,30 +40,44 @@ function normalizePaymentStatus(payload) {
   return "pending";
 }
 
+/**
+ * FIX: A InfinitePay envia `order_nsu` com o UUID interno do pedido.
+ *
+ * Mapeamento correto do payload do webhook InfinitePay:
+ *   order_nsu       → UUID interno (coluna `id` em payment_orders)
+ *   invoice_slug    → slug da fatura (coluna `invoice_slug`)
+ *   transaction_nsu → NSU da transação (coluna `transaction_nsu`)
+ *
+ * PROBLEMA ORIGINAL: o campo `gatewayOrderId` estava lendo `payload.orderNsu`
+ * (camelCase — nunca existe no payload real) — sempre vinha null, quebrando
+ * todas as buscas e causando "Pedido não encontrado" em todos os webhooks.
+ */
 function extractGatewayFields(payload) {
+  const orderUuid =
+    payload?.order_nsu ||
+    payload?.order_id ||
+    payload?.merchant_order_id ||
+    null;
+
+  const invoiceSlug =
+    payload?.invoice_slug ||
+    payload?.invoiceSlug ||
+    payload?.slug ||
+    null;
+
+  const transactionNsu =
+    payload?.transaction_nsu ||
+    payload?.transactionNsu ||
+    payload?.transaction_id ||
+    payload?.nsu ||
+    null;
+
   return {
-    orderNsu:
-      payload?.order_nsu ||
-      payload?.orderId ||
-      payload?.order_id ||
-      payload?.merchant_order_id ||
-      null,
-    gatewayOrderId:
-      payload?.orderNsu ||
-      payload?.orderNSU ||
-      payload?.checkout_id ||
-      payload?.checkoutId ||
-      null,
-    invoiceSlug:
-      payload?.invoice_slug ||
-      payload?.invoiceSlug ||
-      null,
-    transactionNsu:
-      payload?.transaction_nsu ||
-      payload?.transactionId ||
-      payload?.transaction_id ||
-      payload?.nsu ||
-      null,
+    orderUuid,
+    orderNsu: orderUuid,
+    gatewayOrderId: invoiceSlug,
+    invoiceSlug,
+    transactionNsu,
     paidAmount: Number(payload?.paid_amount ?? payload?.amount_paid ?? payload?.amount ?? 0) || 0,
     rawStatus:
       payload?.status ||

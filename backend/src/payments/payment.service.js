@@ -55,26 +55,17 @@ async function createPayment({
   });
 
   logPayment({
-    event: "payment.gateway_linked",
-    gateway,
-    orderId: order.id,
-    userId,
-    status: updated?.status || "pending",
-    amount: amountCents,
-    metadata: {
-      gateway_order_id: link.gatewayOrderId || null,
-      invoice_slug: link.invoiceSlug || null,
-      transaction_nsu: link.transactionNsu || null,
-    },
-  });
-
-  logPayment({
     event: "payment.created",
     gateway,
     orderId: order.id,
     userId,
     status: "pending",
     amount: amountCents,
+    metadata: {
+      gateway_order_id: link.gatewayOrderId || null,
+      invoice_slug: link.invoiceSlug || null,
+      transaction_nsu: link.transactionNsu || null,
+    },
   });
 
   return {
@@ -91,82 +82,51 @@ async function processWebhook({
   gatewayProvider,
 }) {
   const {
-    orderNsu,
-    gatewayOrderId,
+    orderUuid,
     invoiceSlug,
     transactionNsu,
     paidAmount,
     rawStatus,
     captureMethod,
   } = extractGatewayFields(payload);
+
   const normalizedStatus = normalizePaymentStatus(payload);
 
-  if (!orderNsu && !gatewayOrderId && !invoiceSlug && !transactionNsu) {
+  if (!orderUuid && !invoiceSlug && !transactionNsu) {
     console.warn("[PAYMENTS] webhook sem identificadores");
     return { success: false, message: "Identificadores ausentes" };
   }
 
   let order = null;
 
-  if (orderNsu) {
-    order = await findByGatewayId({
-      supabase,
-      gateway,
-      gatewayOrderId: orderNsu,
-    });
+  // FIX: busca primária por UUID interno (order_nsu = order.id)
+  // Esse é o campo que a InfinitePay devolve no webhook como order_nsu
+  if (orderUuid) {
+    order = await findById({ supabase, orderId: orderUuid });
   }
 
+  // Fallback 1: busca por invoice_slug (preenchido na criação do link)
   if (!order && invoiceSlug) {
-    order = await findByInvoiceSlug({
-      supabase,
-      gateway,
-      invoiceSlug,
-    });
+    order = await findByInvoiceSlug({ supabase, gateway, invoiceSlug });
   }
 
-  if (!order && gatewayOrderId && gatewayOrderId !== orderNsu) {
-    order = await findByGatewayId({
-      supabase,
-      gateway,
-      gatewayOrderId,
-    });
-  }
-
+  // Fallback 2: busca por transaction_nsu (pode ter sido salvo de webhook anterior)
   if (!order && transactionNsu) {
-    order = await findByTransactionNsu({
-      supabase,
-      transactionNsu,
-    });
+    order = await findByTransactionNsu({ supabase, transactionNsu });
   }
 
   if (!order) {
     logPayment({
-      event: "webhook.order_not_found",
+      event: "payment.not_found",
       gateway,
-      orderId: orderNsu || null,
+      orderId: orderUuid || null,
       status: "error",
-      amount: paidAmount,
       metadata: {
-        gateway_order_id: gatewayOrderId || null,
         invoice_slug: invoiceSlug || null,
         transaction_nsu: transactionNsu || null,
         rawStatus,
       },
     });
-
-    logPayment({
-      event: "payment.not_found",
-      gateway,
-      orderId: orderNsu,
-      status: "error",
-      metadata: {
-        gatewayOrderId,
-        invoiceSlug,
-        transactionNsu,
-        rawStatus,
-      },
-    });
-
     return { success: false, message: "Pedido não encontrado" };
   }
 
@@ -178,28 +138,32 @@ async function processWebhook({
     status: order.status || "pending",
     amount: paidAmount,
     metadata: {
-      lookup_order_nsu: orderNsu || null,
-      gateway_order_id: order.gateway_order_id || gatewayOrderId || null,
+      lookup_order_uuid: orderUuid || null,
       invoice_slug: order.invoice_slug || invoiceSlug || null,
       transaction_nsu: order.transaction_nsu || transactionNsu || null,
     },
   });
 
-  if (transactionNsu && order.transaction_nsu && order.transaction_nsu === transactionNsu) {
+  // FIX: idempotência por transaction_nsu — evita reprocessar o mesmo evento
+  // Só bloqueia se o pedido JÁ está aprovado E tem o mesmo transaction_nsu
+  if (
+    order.status === "approved" &&
+    order.credited_at &&
+    transactionNsu &&
+    order.transaction_nsu === transactionNsu
+  ) {
     logPayment({
-      event: "webhook.replay_detected",
+      event: "payment.already_processed",
       gateway,
       orderId: order.id,
       userId: order.user_id,
-      status: order.status || normalizedStatus,
-      amount: paidAmount,
-      metadata: {
-        transaction_nsu: transactionNsu,
-      },
+      status: "approved",
+      metadata: { transaction_nsu: transactionNsu },
     });
     return { success: true, message: null };
   }
 
+  // Idempotência por credited_at — independente do transaction_nsu
   if (order.status === "approved" && order.credited_at) {
     logPayment({
       event: "payment.already_processed",
@@ -207,11 +171,7 @@ async function processWebhook({
       orderId: order.id,
       userId: order.user_id,
       status: "approved",
-      amount: paidAmount,
-      metadata: {
-        transaction_nsu: transactionNsu || order.transaction_nsu || null,
-        rawStatus,
-      },
+      metadata: { rawStatus },
     });
     return { success: true, message: null };
   }
@@ -223,19 +183,15 @@ async function processWebhook({
     userId: order.user_id,
     status: normalizedStatus,
     amount: paidAmount,
-    metadata: {
-      rawStatus,
-      gatewayOrderId: orderNsu || gatewayOrderId || order.gateway_order_id || null,
-      invoiceSlug,
-      transactionNsu,
-    },
+    metadata: { rawStatus, invoiceSlug, transactionNsu },
   });
 
+  // Atualiza o pedido com dados do webhook
   const updated = await updateOrderStatus({
     supabase,
     orderId: order.id,
     status: normalizedStatus,
-    gatewayOrderId: orderNsu || gatewayOrderId || order.gateway_order_id,
+    gatewayOrderId: invoiceSlug || order.invoice_slug,
     invoiceSlug: invoiceSlug || order.invoice_slug,
     transactionNsu: transactionNsu || order.transaction_nsu,
     gatewayStatus: rawStatus || normalizedStatus,
@@ -244,15 +200,16 @@ async function processWebhook({
     webhookPayload: payload,
   });
 
+  // Se update retornou null, o pedido já foi aprovado por outro processo (race condition)
   if (!updated) {
-    const refreshedOrder = await findById({ supabase, orderId: order.id });
-    if (refreshedOrder?.credited_at) {
+    const refreshed = await findById({ supabase, orderId: order.id });
+    if (refreshed?.credited_at) {
       logPayment({
         event: "payment.already_processed",
         gateway,
         orderId: order.id,
         userId: order.user_id,
-        status: refreshedOrder.status || normalizedStatus,
+        status: refreshed.status || normalizedStatus,
       });
     }
     return { success: true, message: null };
@@ -266,17 +223,12 @@ async function processWebhook({
       userId: order.user_id,
       status: normalizedStatus,
       amount: paidAmount,
-      metadata: {
-        gatewayOrderId: orderNsu || gatewayOrderId || order.gateway_order_id || null,
-        invoiceSlug,
-        transactionNsu,
-        rawStatus,
-      },
+      metadata: { invoiceSlug, transactionNsu, rawStatus },
     });
-
     return { success: true, message: null };
   }
 
+  // Dupla checagem antes de creditar (evita race condition com verifyPayment)
   if (updated.credited_at) {
     logPayment({
       event: "payment.already_processed",
@@ -284,13 +236,8 @@ async function processWebhook({
       orderId: order.id,
       userId: order.user_id,
       status: "approved",
-      amount: paidAmount,
-      metadata: {
-        rawStatus,
-        transactionNsu,
-      },
+      metadata: { rawStatus, transactionNsu },
     });
-
     return { success: true, message: null };
   }
 
@@ -308,11 +255,8 @@ async function processWebhook({
       orderId: order.id,
       userId: order.user_id,
       status: "error",
-      metadata: {
-        credits: order.credits,
-      },
+      metadata: { credits: order.credits },
     });
-
     return { success: false, message: "Falha ao creditar usuário" };
   }
 
@@ -328,8 +272,7 @@ async function processWebhook({
     status: "approved",
     amount: paidAmount,
     metadata: {
-      invoice_slug: invoiceSlug || gatewayOrderId,
-      gateway_order_id: orderNsu || gatewayOrderId || order.gateway_order_id || null,
+      invoice_slug: invoiceSlug,
       transaction_nsu: transactionNsu,
       capture_method: captureMethod,
       rawStatus,
@@ -343,10 +286,7 @@ async function processWebhook({
 
 async function getPaymentStatus({ supabase, orderId, userId }) {
   const order = await findByUserAndId({ supabase, userId, orderId });
-  if (!order) {
-    return null;
-  }
-
+  if (!order) return null;
   return order.status || "pending";
 }
 
@@ -404,21 +344,14 @@ async function retryPayment({
   appBaseUrl,
   gateway = "infinitepay",
 }) {
-  if (!userId) {
-    throw new Error("userId é obrigatório");
-  }
+  if (!userId) throw new Error("userId é obrigatório");
 
   const order = await findById({ supabase, orderId });
 
-  if (!order || order.user_id !== userId) {
-    return null;
-  }
+  if (!order || order.user_id !== userId) return null;
 
   if (order.status === "approved") {
-    return {
-      status: "approved",
-      paymentUrl: order.gateway_payment_url,
-    };
+    return { status: "approved", paymentUrl: order.gateway_payment_url };
   }
 
   const link = await gatewayProvider.createPaymentLink({
@@ -453,10 +386,4 @@ async function retryPayment({
   };
 }
 
-export {
-  createPayment,
-  processWebhook,
-  getPaymentStatus,
-  verifyPayment,
-  retryPayment,
-};
+export { createPayment, processWebhook, getPaymentStatus, verifyPayment, retryPayment };
