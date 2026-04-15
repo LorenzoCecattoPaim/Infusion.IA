@@ -8,11 +8,17 @@ class InfinitePayGateway {
     this.timeoutMs = timeoutMs;
   }
 
-  async createPaymentLink({ orderId, amountCents, credits, customer, baseUrl }) {
+  async createPaymentLink({ orderId, amountCents, credits, customer }) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
+      const appBaseUrl = process.env.APP_BASE_URL;
+
+      if (!appBaseUrl) {
+        throw new Error("APP_BASE_URL não definida");
+      }
+
       const payload = {
         handle: this.handle,
         order_nsu: orderId,
@@ -20,17 +26,19 @@ class InfinitePayGateway {
           {
             quantity: 1,
             price: amountCents,
-            description: `${credits} cr�ditos`,
+            description: `${credits} créditos`,
           },
         ],
-        webhook_url: `${baseUrl}/webhook/infinitepay?secret=${this.webhookSecret}`,
-        redirect_url: `${baseUrl}/pagamento-concluido`,
+        webhook_url: `${appBaseUrl}/api/webhook/infinitepay?secret=${this.webhookSecret}`,
+        redirect_url: `${appBaseUrl}/pagamento-concluido`,
         customer: {
           name: customer?.name || undefined,
           email: customer?.email || undefined,
           phone_number: customer?.phone_number || undefined,
         },
       };
+
+      console.log("📡 Criando pagamento:", payload);
 
       const response = await fetch(
         `${this.baseUrl}/invoices/public/checkout/links`,
@@ -44,28 +52,31 @@ class InfinitePayGateway {
 
       const text = await response.text();
       let body = null;
+
       try {
         body = text ? JSON.parse(text) : null;
-      } catch {
-        body = null;
-      }
+      } catch {}
 
       if (!response.ok) {
         const message = body?.message || body?.error || text || "Erro na InfinitePay";
         throw new Error(message);
       }
 
+      console.log("🧾 Resposta InfinitePay:", body);
+
       const paymentUrl =
-        body?.gateway_payment_url ||
         body?.payment_url ||
-        body?.paymentUrl ||
         body?.checkout_url ||
         body?.url ||
         null;
-      const gatewayOrderId = body?.gateway_order_id || body?.invoice_slug || body?.id || null;
+
+      const gatewayOrderId =
+        body?.invoice_slug ||
+        body?.id ||
+        null;
 
       if (!paymentUrl || !gatewayOrderId) {
-        throw new Error("Resposta inv�lida da InfinitePay");
+        throw new Error("Resposta inválida da InfinitePay");
       }
 
       return {
