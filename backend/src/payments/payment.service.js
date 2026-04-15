@@ -4,13 +4,17 @@ import {
   updateOrderStatus,
   findById,
   findByGatewayId,
+  findByTransactionNsu,
+  findByUserAndId,
 } from "./payment.repository.js";
 import { addCredits } from "./credits.service.js";
 import { logPayment } from "./payment.logger.js";
+import {
+  buildSyntheticVerifyPayload,
+  extractGatewayFields,
+  normalizePaymentStatus,
+} from "./payment.utils.js";
 
-/* =========================
-   💳 CREATE PAYMENT
-========================= */
 async function createPayment({
   supabase,
   gatewayProvider,
@@ -62,45 +66,31 @@ async function createPayment({
   };
 }
 
-/* =========================
-   🔔 PROCESS WEBHOOK
-========================= */
 async function processWebhook({
   supabase,
   payload,
   gateway = "infinitepay",
   gatewayProvider,
 }) {
-  const orderId = payload?.order_nsu || null;
-  const gatewayOrderId = payload?.invoice_slug || null;
+  const {
+    orderNsu,
+    gatewayOrderId,
+    transactionNsu,
+    paidAmount,
+    rawStatus,
+    captureMethod,
+  } = extractGatewayFields(payload);
+  const normalizedStatus = normalizePaymentStatus(payload);
 
-  const isApproved = gatewayProvider?.isApprovedWebhook
-    ? gatewayProvider.isApprovedWebhook(payload)
-    : Number(payload?.paid_amount ?? payload?.amount ?? 0) > 0;
-
-  if (!isApproved) {
-    logPayment({
-      event: "webhook.ignored",
-      gateway,
-      orderId,
-      status: "ignored",
-      metadata: {
-        reason: "paid_amount_zero_or_missing",
-      },
-    });
-
-    return { success: false, message: "Pagamento não confirmado" };
-  }
-
-  if (!orderId && !gatewayOrderId) {
+  if (!orderNsu && !gatewayOrderId && !transactionNsu) {
     console.warn("[PAYMENTS] webhook sem identificadores");
     return { success: false, message: "Identificadores ausentes" };
   }
 
   let order = null;
 
-  if (orderId) {
-    order = await findById({ supabase, orderId });
+  if (orderNsu) {
+    order = await findById({ supabase, orderId: orderNsu });
   }
 
   if (!order && gatewayOrderId) {
@@ -111,19 +101,39 @@ async function processWebhook({
     });
   }
 
+  if (!order && transactionNsu) {
+    order = await findByTransactionNsu({
+      supabase,
+      transactionNsu,
+    });
+  }
+
   if (!order) {
     logPayment({
       event: "payment.not_found",
       gateway,
-      orderId,
+      orderId: orderNsu,
       status: "error",
-      metadata: { gatewayOrderId },
+      metadata: { gatewayOrderId, transactionNsu, rawStatus },
     });
 
     return { success: false, message: "Pedido não encontrado" };
   }
 
-  // 🛡️ Idempotência forte
+  logPayment({
+    event: "webhook.received",
+    gateway,
+    orderId: order.id,
+    userId: order.user_id,
+    status: normalizedStatus,
+    amount: paidAmount,
+    metadata: {
+      rawStatus,
+      gatewayOrderId,
+      transactionNsu,
+    },
+  });
+
   if (order.status === "approved") {
     logPayment({
       event: "payment.already_processed",
@@ -136,20 +146,40 @@ async function processWebhook({
     return { success: true, message: null };
   }
 
-  // 🔒 Atualização segura (evita race condition)
   const updated = await updateOrderStatus({
     supabase,
     orderId: order.id,
-    status: "approved",
+    status: normalizedStatus,
     gatewayOrderId: gatewayOrderId || order.gateway_order_id,
+    transactionNsu: transactionNsu || order.transaction_nsu,
+    gatewayStatus: rawStatus || normalizedStatus,
+    paidAmount,
+    captureMethod,
+    webhookPayload: payload,
   });
 
   if (!updated) {
-    // outro processo aprovou antes
     return { success: true, message: null };
   }
 
-  // 💰 Crédito (executa apenas 1 vez garantido)
+  if (normalizedStatus !== "approved") {
+    logPayment({
+      event: "payment.status_updated",
+      gateway,
+      orderId: order.id,
+      userId: order.user_id,
+      status: normalizedStatus,
+      amount: paidAmount,
+      metadata: {
+        gatewayOrderId,
+        transactionNsu,
+        rawStatus,
+      },
+    });
+
+    return { success: true, message: null };
+  }
+
   const creditResult = await addCredits({
     supabase,
     userId: order.user_id,
@@ -176,33 +206,73 @@ async function processWebhook({
     orderId: order.id,
     userId: order.user_id,
     status: "approved",
-    amount: payload?.paid_amount,
+    amount: paidAmount,
     metadata: {
       invoice_slug: gatewayOrderId,
-      transaction_nsu: payload?.transaction_nsu,
-      capture_method: payload?.capture_method,
+      transaction_nsu: transactionNsu,
+      capture_method: captureMethod,
+      rawStatus,
     },
   });
 
   return { success: true, message: null };
 }
 
-/* =========================
-   🔎 STATUS
-========================= */
 async function getPaymentStatus({ supabase, orderId, userId }) {
-  const order = await findById({ supabase, orderId });
-
-  if (!order || (userId && order.user_id !== userId)) {
+  const order = await findByUserAndId({ supabase, userId, orderId });
+  if (!order) {
     return null;
   }
 
   return order.status || "pending";
 }
 
-/* =========================
-   🔁 RETRY PAYMENT
-========================= */
+async function verifyPayment({
+  supabase,
+  orderId,
+  userId,
+  query,
+  gateway = "infinitepay",
+  gatewayProvider,
+}) {
+  const order = await findByUserAndId({ supabase, userId, orderId });
+  if (!order) return null;
+
+  if (order.status === "approved") {
+    return {
+      orderId: order.id,
+      status: "approved",
+      paymentUrl: order.gateway_payment_url,
+      credits: Number(order.credits || 0),
+    };
+  }
+
+  const syntheticPayload = buildSyntheticVerifyPayload(order.id, query);
+  const shouldAttemptRecovery =
+    normalizePaymentStatus(syntheticPayload) === "approved" &&
+    (syntheticPayload.transaction_nsu ||
+      syntheticPayload.invoice_slug ||
+      Number(syntheticPayload.paid_amount) > 0);
+
+  if (shouldAttemptRecovery) {
+    await processWebhook({
+      supabase,
+      payload: syntheticPayload,
+      gateway,
+      gatewayProvider,
+    });
+  }
+
+  const refreshed = await findByUserAndId({ supabase, userId, orderId });
+
+  return {
+    orderId: refreshed.id,
+    status: refreshed.status || "pending",
+    paymentUrl: refreshed.gateway_payment_url,
+    credits: Number(refreshed.credits || 0),
+  };
+}
+
 async function retryPayment({
   supabase,
   gatewayProvider,
@@ -262,5 +332,6 @@ export {
   createPayment,
   processWebhook,
   getPaymentStatus,
+  verifyPayment,
   retryPayment,
 };

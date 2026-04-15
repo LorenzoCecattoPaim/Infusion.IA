@@ -26,9 +26,11 @@ import {
   createPayment,
   getPaymentStatus,
   processWebhook,
+  verifyPayment,
   retryPayment,
 } from "./src/payments/payment.service.js";
 import { createInfinitePayWebhookHandler } from "./src/payments/webhook.controller.js";
+import { buildRequireAuth } from "./src/auth/auth.middleware.js";
 import { toFile } from "openai";
 
 const app = express();
@@ -137,7 +139,10 @@ const infinitePayWebhookHandler = createInfinitePayWebhookHandler({
   webhookSecret: INFINITEPAY_WEBHOOK_SECRET,
   getSupabase,
   processWebhook,
+  gatewayProvider: infinitePayGateway,
 });
+
+const requireAuth = buildRequireAuth({ getSupabase, sendError });
 
 function buildPlanRows() {
   const monthly = PLAN_CATALOG.monthly.map((plan) => ({
@@ -182,18 +187,6 @@ async function syncPlanCatalog() {
   }
 }
 
-function getBearerToken(req) {
-  const raw =
-    req.headers.authorization ||
-    req.headers.Authorization ||
-    req.headers["authorization"];
-  if (!raw) return null;
-  const header = Array.isArray(raw) ? raw.join(" ") : String(raw);
-  const match = header.match(/^\s*Bearer\s+(.+)\s*$/i);
-  if (!match) return null;
-  return match[1].trim() || null;
-}
-
 function isUuid(value) {
   if (typeof value !== "string") return false;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -232,21 +225,6 @@ function normalizeChatMessages(messages, lastMessageOverride) {
     normalized.push({ role: "user", content: override });
   }
   return normalized;
-}
-
-async function requireAuth(req, res, next) {
-  try {
-    const token = getBearerToken(req);
-    if (!token) return sendError(res, 401, "Token ausente.");
-    const supabase = getSupabase();
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (error || !user) return sendError(res, 401, "Token inválido ou expirado.");
-    req.user = user;
-    return next();
-  } catch (err) {
-    console.error("[AUTH]", err);
-    return sendError(res, 401, "Falha na autenticação.");
-  }
 }
 
 function sendInsufficientCredits(res, credits) {
@@ -512,6 +490,34 @@ router.get("/payments/:id/status", requireAuth, async (req, res) => {
   }
 });
 
+router.get("/verify-payment/:id", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isUuid(id)) return sendError(res, 400, "order_nsu inválido");
+
+    const supabase = getSupabase();
+    const result = await verifyPayment({
+      supabase,
+      orderId: id,
+      userId: req.user.id,
+      query: req.query || {},
+      gatewayProvider: infinitePayGateway,
+    });
+
+    if (!result) return sendError(res, 404, "Pedido não encontrado.");
+
+    return sendSuccess(res, {
+      order_id: result.orderId,
+      status: result.status,
+      payment_url: result.paymentUrl,
+      credits: result.credits,
+    });
+  } catch (error) {
+    console.error("[PAYMENTS] verify", error);
+    return sendError(res, 500, "Erro ao verificar pagamento.");
+  }
+});
+
 router.post("/payments/:id/retry", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -523,7 +529,7 @@ router.post("/payments/:id/retry", requireAuth, async (req, res) => {
       gatewayProvider: infinitePayGateway,
       orderId: id,
       userId: req.user.id,
-      baseUrl,
+      appBaseUrl: baseUrl,
     });
     if (!result) return sendError(res, 404, "Pedido não encontrado.");
     return sendSuccess(res, { status: result.status, payment_url: result.paymentUrl });

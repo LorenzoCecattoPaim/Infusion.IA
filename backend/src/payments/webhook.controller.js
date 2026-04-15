@@ -10,7 +10,6 @@ function createInfinitePayWebhookHandler({
 }) {
   return (req, res) => {
     try {
-      // 🔐 1. Validação do secret (continua usando)
       const secret = req.query?.secret;
       if (!secret || secret !== webhookSecret) {
         return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -19,13 +18,8 @@ function createInfinitePayWebhookHandler({
       const rawBody = req.body;
       const signature = req.headers["x-signature"];
 
-      // 🔐 2. Assinatura (se existir)
       if (Buffer.isBuffer(rawBody) && signature) {
-        const valid = verifyWebhookSignature(
-          rawBody,
-          signature,
-          webhookSecret
-        );
+        const valid = verifyWebhookSignature(rawBody, signature, webhookSecret);
 
         if (!valid) {
           console.warn("[WEBHOOK] assinatura inválida");
@@ -33,22 +27,29 @@ function createInfinitePayWebhookHandler({
         }
       }
 
-      // 📦 3. Parse do payload
       const payload = Buffer.isBuffer(rawBody)
         ? JSON.parse(rawBody.toString())
         : rawBody || {};
 
-      // ⚡ 4. Resposta IMEDIATA (regra da InfinitePay)
+      console.log(
+        JSON.stringify({
+          event: "webhook.infinitepay_received",
+          orderNsu: payload?.order_nsu || null,
+          invoiceSlug: payload?.invoice_slug || null,
+          transactionNsu: payload?.transaction_nsu || null,
+          hasSignature: Boolean(signature),
+        })
+      );
+
       res.status(200).json({ success: true, message: null });
 
-      // 🧠 5. Processamento assíncrono
       setImmediate(async () => {
         try {
           const supabase = getSupabase();
-
-          // 🛡️ 6. Proteção contra replay
           const eventId =
-            payload?.transaction_nsu || payload?.invoice_slug;
+            payload?.transaction_nsu ||
+            payload?.invoice_slug ||
+            payload?.order_nsu;
 
           if (await isReplay(supabase, eventId)) {
             console.warn("[WEBHOOK] replay detectado", eventId);
@@ -71,8 +72,6 @@ function createInfinitePayWebhookHandler({
       });
     } catch (error) {
       console.error("[WEBHOOK ERROR]", error);
-
-      // ❗ Aqui precisa seguir padrão da InfinitePay
       return res.status(400).json({
         success: false,
         message: "Erro ao processar webhook",

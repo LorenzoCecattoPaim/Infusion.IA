@@ -1,4 +1,5 @@
 import "./payment.types.js";
+import { normalizePaymentStatus } from "./payment.utils.js";
 
 class InfinitePayGateway {
   constructor({ baseUrl, handle, webhookSecret, timeoutMs = 10000 }) {
@@ -8,19 +9,9 @@ class InfinitePayGateway {
     this.timeoutMs = timeoutMs;
   }
 
-  /**
-   * A InfinitePay só dispara webhook quando o pagamento já foi aprovado.
-   * Não há campo "status" no payload — a presença do webhook já é a confirmação.
-   * Valida pela presença de paid_amount > 0 como camada extra de segurança.
-   * @param {object} payload
-   * @returns {boolean}
-   */
   isApprovedWebhook(payload) {
     if (!payload) return false;
-    // FIX: InfinitePay não envia campo "status" no webhook.
-    // O webhook só é disparado após aprovação, mas validamos paid_amount como garantia extra.
-    const paidAmount = Number(payload.paid_amount ?? payload.amount ?? 0);
-    return paidAmount > 0;
+    return normalizePaymentStatus(payload) === "approved";
   }
 
   /**
@@ -59,15 +50,12 @@ class InfinitePayGateway {
 
       console.log("📡 Criando pagamento:", payload);
 
-      const response = await fetch(
-        `${this.baseUrl}/invoices/public/checkout/links`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        }
-      );
+      const response = await fetch(`${this.baseUrl}/invoices/public/checkout/links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
 
       const text = await response.text();
       let body = null;
@@ -83,8 +71,6 @@ class InfinitePayGateway {
 
       console.log("🧾 Resposta InfinitePay:", body);
 
-      // FIX: A doc confirma que a resposta retorna apenas { url: "..." }
-      // gatewayOrderId (invoice_slug) só chega depois via webhook — fica null por ora
       const paymentUrl = body?.url || body?.payment_url || body?.checkout_url || null;
 
       if (!paymentUrl) {
@@ -93,7 +79,7 @@ class InfinitePayGateway {
 
       return {
         paymentUrl,
-        gatewayOrderId: null, // será preenchido quando o webhook chegar com invoice_slug
+        gatewayOrderId: null,
       };
     } finally {
       clearTimeout(timeout);
