@@ -8,14 +8,33 @@ class InfinitePayGateway {
     this.timeoutMs = timeoutMs;
   }
 
-  async createPaymentLink({ orderId, amountCents, credits, customer }) {
+  /**
+   * A InfinitePay só dispara webhook quando o pagamento já foi aprovado.
+   * Não há campo "status" no payload — a presença do webhook já é a confirmação.
+   * Valida pela presença de paid_amount > 0 como camada extra de segurança.
+   * @param {object} payload
+   * @returns {boolean}
+   */
+  isApprovedWebhook(payload) {
+    if (!payload) return false;
+    // FIX: InfinitePay não envia campo "status" no webhook.
+    // O webhook só é disparado após aprovação, mas validamos paid_amount como garantia extra.
+    const paidAmount = Number(payload.paid_amount ?? payload.amount ?? 0);
+    return paidAmount > 0;
+  }
+
+  /**
+   * @param {{ orderId: string, amountCents: number, credits: number, customer: object | null, appBaseUrl?: string }} param0
+   * @returns {Promise<{ paymentUrl: string, gatewayOrderId: string | null }>}
+   */
+  async createPaymentLink({ orderId, amountCents, credits, customer, appBaseUrl }) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      const appBaseUrl = process.env.APP_BASE_URL;
+      const resolvedAppBaseUrl = appBaseUrl || process.env.APP_BASE_URL;
 
-      if (!appBaseUrl) {
+      if (!resolvedAppBaseUrl) {
         throw new Error("APP_BASE_URL não definida");
       }
 
@@ -29,8 +48,8 @@ class InfinitePayGateway {
             description: `${credits} créditos`,
           },
         ],
-        webhook_url: `${appBaseUrl}/api/webhook/infinitepay?secret=${this.webhookSecret}`,
-        redirect_url: `${appBaseUrl}/pagamento-concluido`,
+        webhook_url: `${resolvedAppBaseUrl}/api/webhook/infinitepay?secret=${this.webhookSecret}`,
+        redirect_url: `${resolvedAppBaseUrl}/pagamento-concluido`,
         customer: {
           name: customer?.name || undefined,
           email: customer?.email || undefined,
@@ -64,24 +83,17 @@ class InfinitePayGateway {
 
       console.log("🧾 Resposta InfinitePay:", body);
 
-      const paymentUrl =
-        body?.payment_url ||
-        body?.checkout_url ||
-        body?.url ||
-        null;
+      // FIX: A doc confirma que a resposta retorna apenas { url: "..." }
+      // gatewayOrderId (invoice_slug) só chega depois via webhook — fica null por ora
+      const paymentUrl = body?.url || body?.payment_url || body?.checkout_url || null;
 
-      const gatewayOrderId =
-        body?.invoice_slug ||
-        body?.id ||
-        null;
-
-      if (!paymentUrl || !gatewayOrderId) {
-        throw new Error("Resposta inválida da InfinitePay");
+      if (!paymentUrl) {
+        throw new Error("Resposta inválida da InfinitePay: url não encontrada");
       }
 
       return {
         paymentUrl,
-        gatewayOrderId,
+        gatewayOrderId: null, // será preenchido quando o webhook chegar com invoice_slug
       };
     } finally {
       clearTimeout(timeout);

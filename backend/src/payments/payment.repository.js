@@ -24,9 +24,7 @@ async function updateOrderStatus({
   gatewayOrderId,
   gatewayPaymentUrl,
 }) {
-  const updates = {
-    status,
-  };
+  const updates = { status };
 
   if (gatewayOrderId) updates.gateway_order_id = gatewayOrderId;
   if (gatewayPaymentUrl) updates.gateway_payment_url = gatewayPaymentUrl;

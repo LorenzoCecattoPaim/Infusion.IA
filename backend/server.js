@@ -484,7 +484,7 @@ router.post("/payments/create", requireAuth, async (req, res) => {
       credits: Math.trunc(parsedCredits),
       amountCents: Math.trunc(parsedAmount),
       customer: customer || null,
-      baseUrl,
+      appBaseUrl: baseUrl,
     });
     return res.status(201).json({
       payment_url: result.paymentUrl,
