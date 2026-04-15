@@ -1,20 +1,16 @@
 import "./payment.types.js";
-import { createOrder, updateOrderStatus, findById, findByGatewayId } from "./payment.repository.js";
+import {
+  createOrder,
+  updateOrderStatus,
+  findById,
+  findByGatewayId,
+} from "./payment.repository.js";
 import { addCredits } from "./credits.service.js";
+import { logPayment } from "./payment.logger.js";
 
-function logPaymentEvent({ event, gateway, orderId, userId, status, extra }) {
-  console.log(
-    JSON.stringify({
-      event,
-      gateway,
-      orderId,
-      userId,
-      status,
-      ...extra,
-    })
-  );
-}
-
+/* =========================
+   💳 CREATE PAYMENT
+========================= */
 async function createPayment({
   supabase,
   gatewayProvider,
@@ -46,16 +42,17 @@ async function createPayment({
     supabase,
     orderId: order.id,
     status: "pending",
-    gatewayOrderId: link.gatewayOrderId, // null no momento da criação — preenchido pelo webhook
+    gatewayOrderId: link.gatewayOrderId,
     gatewayPaymentUrl: link.paymentUrl,
   });
 
-  logPaymentEvent({
-    event: "payment_created",
+  logPayment({
+    event: "payment.created",
     gateway,
     orderId: order.id,
     userId,
     status: "pending",
+    amount: amountCents,
   });
 
   return {
@@ -65,36 +62,41 @@ async function createPayment({
   };
 }
 
-async function processWebhook({ supabase, payload, gateway = "infinitepay", gatewayProvider }) {
+/* =========================
+   🔔 PROCESS WEBHOOK
+========================= */
+async function processWebhook({
+  supabase,
+  payload,
+  gateway = "infinitepay",
+  gatewayProvider,
+}) {
   const orderId = payload?.order_nsu || null;
   const gatewayOrderId = payload?.invoice_slug || null;
 
-  // FIX: A InfinitePay NÃO envia campo "status" no webhook.
-  // O webhook só é disparado quando o pagamento é aprovado.
-  // Usamos isApprovedWebhook do gateway para validar pela presença de paid_amount > 0.
   const isApproved = gatewayProvider?.isApprovedWebhook
     ? gatewayProvider.isApprovedWebhook(payload)
     : Number(payload?.paid_amount ?? payload?.amount ?? 0) > 0;
 
   if (!isApproved) {
-    console.warn(
-      JSON.stringify({
-        event: "webhook_ignored",
-        gateway,
-        orderId,
-        gatewayOrderId,
+    logPayment({
+      event: "webhook.ignored",
+      gateway,
+      orderId,
+      status: "ignored",
+      metadata: {
         reason: "paid_amount_zero_or_missing",
-      })
-    );
+      },
+    });
+
     return { success: false, message: "Pagamento não confirmado" };
   }
 
   if (!orderId && !gatewayOrderId) {
-    console.warn("[PAYMENTS] webhook sem order_nsu nem invoice_slug");
-    return { success: false, message: "Identificadores do pedido ausentes" };
+    console.warn("[PAYMENTS] webhook sem identificadores");
+    return { success: false, message: "Identificadores ausentes" };
   }
 
-  // Busca por orderId (ID interno) primeiro, fallback por gatewayOrderId
   let order = null;
 
   if (orderId) {
@@ -102,19 +104,39 @@ async function processWebhook({ supabase, payload, gateway = "infinitepay", gate
   }
 
   if (!order && gatewayOrderId) {
-    order = await findByGatewayId({ supabase, gateway, gatewayOrderId });
+    order = await findByGatewayId({
+      supabase,
+      gateway,
+      gatewayOrderId,
+    });
   }
 
   if (!order) {
-    console.warn("[PAYMENTS] pedido não encontrado", { orderId, gatewayOrderId });
+    logPayment({
+      event: "payment.not_found",
+      gateway,
+      orderId,
+      status: "error",
+      metadata: { gatewayOrderId },
+    });
+
     return { success: false, message: "Pedido não encontrado" };
   }
 
+  // 🛡️ Idempotência forte
   if (order.status === "approved") {
-    // Idempotência: já processado
+    logPayment({
+      event: "payment.already_processed",
+      gateway,
+      orderId: order.id,
+      userId: order.user_id,
+      status: "approved",
+    });
+
     return { success: true, message: null };
   }
 
+  // 🔒 Atualização segura (evita race condition)
   const updated = await updateOrderStatus({
     supabase,
     orderId: order.id,
@@ -123,10 +145,11 @@ async function processWebhook({ supabase, payload, gateway = "infinitepay", gate
   });
 
   if (!updated) {
-    // Race condition: outro processo aprovou antes — idempotente
+    // outro processo aprovou antes
     return { success: true, message: null };
   }
 
+  // 💰 Crédito (executa apenas 1 vez garantido)
   const creditResult = await addCredits({
     supabase,
     userId: order.user_id,
@@ -135,43 +158,51 @@ async function processWebhook({ supabase, payload, gateway = "infinitepay", gate
   });
 
   if (!creditResult.ok) {
-    console.error(
-      JSON.stringify({
-        event: "credits_add_error",
-        gateway,
-        orderId: order.id,
-        userId: order.user_id,
+    logPayment({
+      event: "credits.error",
+      gateway,
+      orderId: order.id,
+      userId: order.user_id,
+      status: "error",
+      metadata: {
         credits: order.credits,
-        reason: "add_credits_failed_after_approval",
-      })
-    );
+      },
+    });
   }
 
-  logPaymentEvent({
-    event: "payment_approved",
+  logPayment({
+    event: "payment.approved",
     gateway,
     orderId: order.id,
     userId: order.user_id,
     status: "approved",
-    extra: {
+    amount: payload?.paid_amount,
+    metadata: {
       invoice_slug: gatewayOrderId,
-      transaction_nsu: payload?.transaction_nsu || null,
-      capture_method: payload?.capture_method || null,
-      paid_amount: payload?.paid_amount || null,
+      transaction_nsu: payload?.transaction_nsu,
+      capture_method: payload?.capture_method,
     },
   });
 
   return { success: true, message: null };
 }
 
+/* =========================
+   🔎 STATUS
+========================= */
 async function getPaymentStatus({ supabase, orderId, userId }) {
   const order = await findById({ supabase, orderId });
+
   if (!order || (userId && order.user_id !== userId)) {
     return null;
   }
+
   return order.status || "pending";
 }
 
+/* =========================
+   🔁 RETRY PAYMENT
+========================= */
 async function retryPayment({
   supabase,
   gatewayProvider,
@@ -181,16 +212,20 @@ async function retryPayment({
   gateway = "infinitepay",
 }) {
   if (!userId) {
-    throw new Error("userId é obrigatório para retryPayment");
+    throw new Error("userId é obrigatório");
   }
 
   const order = await findById({ supabase, orderId });
+
   if (!order || order.user_id !== userId) {
     return null;
   }
 
   if (order.status === "approved") {
-    return { status: "approved", paymentUrl: order.gateway_payment_url };
+    return {
+      status: "approved",
+      paymentUrl: order.gateway_payment_url,
+    };
   }
 
   const link = await gatewayProvider.createPaymentLink({
@@ -209,12 +244,12 @@ async function retryPayment({
     gatewayPaymentUrl: link.paymentUrl,
   });
 
-  logPaymentEvent({
-    event: "payment_retry",
+  logPayment({
+    event: "payment.retry",
     gateway,
     orderId: order.id,
     userId: order.user_id,
-    status: updated?.status || "pending",
+    status: "pending",
   });
 
   return {
@@ -223,4 +258,9 @@ async function retryPayment({
   };
 }
 
-export { createPayment, processWebhook, getPaymentStatus, retryPayment };
+export {
+  createPayment,
+  processWebhook,
+  getPaymentStatus,
+  retryPayment,
+};

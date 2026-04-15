@@ -64,6 +64,7 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use("/api/webhook/infinitepay", express.raw({ type: "*/*" }));
 app.use(express.json({ limit: "10mb" }));
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
