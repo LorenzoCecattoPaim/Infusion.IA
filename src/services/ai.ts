@@ -1,6 +1,6 @@
 import { fetchFunctions } from "@/lib/apiBase";
 
-const AI_REQUEST_TIMEOUT_MS = 15000;
+const AI_REQUEST_TIMEOUT_MS = 30000; // aumentado pois edição de imagem é mais lenta
 const AI_TIMEOUT_MESSAGE =
   "A IA está demorando mais do que o esperado. Tente novamente em instantes.";
 const aiResponseCache = new Map<string, string>();
@@ -234,7 +234,8 @@ export async function generateImage(payload: {
   format?: string;
   style?: string | null;
   incluir_espaco_logo?: boolean;
-  product_image?: string;
+  product_image?: string;  // base64 data URL da imagem do produto
+  logo_image?: string;     // base64 data URL da logo
 }): Promise<GenerateImageResponse> {
   try {
     return await requestAi<GenerateImageResponse>(
