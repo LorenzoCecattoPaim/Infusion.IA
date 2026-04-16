@@ -3,8 +3,11 @@ import { normalizePaymentStatus } from "./payment.utils.js";
 
 class InfinitePayGateway {
   constructor({ baseUrl, handle, webhookSecret, timeoutMs = 10000 }) {
-    this.baseUrl = baseUrl.replace(/\/$/, "");
-    this.handle = handle;
+    this.baseUrl = String(baseUrl || "").trim().replace(/\/$/, "");
+    this.handle = String(handle || "")
+      .trim()
+      .replace(/\$/g, "")
+      .replace(/\s+/g, "");
     this.webhookSecret = webhookSecret;
     this.timeoutMs = timeoutMs;
   }
@@ -24,6 +27,32 @@ class InfinitePayGateway {
 
     try {
       const resolvedAppBaseUrl = appBaseUrl || process.env.APP_BASE_URL;
+      const url = `${this.baseUrl}/invoices/public/checkout/links`;
+      const customerPayload = {
+        ...(customer?.name ? { name: String(customer.name).trim() } : {}),
+        ...(customer?.email ? { email: String(customer.email).trim() } : {}),
+        ...(customer?.phone_number
+          ? { phone_number: String(customer.phone_number).trim() }
+          : {}),
+      };
+
+      console.log("InfinitePay handle:", this.handle);
+
+      if (!this.baseUrl) {
+        throw new Error("INFINITEPAY_BASE_URL não definida");
+      }
+
+      if (this.baseUrl !== "https://api.infinitepay.io") {
+        console.warn("[InfinitePay] base URL diferente da produção:", this.baseUrl);
+      }
+
+      if (!this.handle) {
+        throw new Error("INFINITEPAY_HANDLE não definido");
+      }
+
+      if (/\$/.test(this.handle) || /\s/.test(this.handle)) {
+        console.warn("[InfinitePay] handle inválido após sanitização:", this.handle);
+      }
 
       if (!resolvedAppBaseUrl) {
         throw new Error("APP_BASE_URL não definida");
@@ -41,16 +70,15 @@ class InfinitePayGateway {
         ],
         webhook_url: `${resolvedAppBaseUrl}/api/webhook/infinitepay?secret=${this.webhookSecret}`,
         redirect_url: `${resolvedAppBaseUrl}/pagamento-concluido`,
-        customer: {
-          name: customer?.name || undefined,
-          email: customer?.email || undefined,
-          phone_number: customer?.phone_number || undefined,
-        },
+        ...(Object.keys(customerPayload).length ? { customer: customerPayload } : {}),
       };
 
-      console.log("📡 Criando pagamento:", payload);
+      console.log("📡 InfinitePay Request:", {
+        url,
+        payload,
+      });
 
-      const response = await fetch(`${this.baseUrl}/invoices/public/checkout/links`, {
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -65,11 +93,12 @@ class InfinitePayGateway {
       } catch {}
 
       if (!response.ok) {
+        console.error("InfinitePay error response:", body || text || response.statusText);
         const message = body?.message || body?.error || text || "Erro na InfinitePay";
         throw new Error(message);
       }
 
-      console.log("🧾 Resposta InfinitePay:", body);
+      console.log("📩 InfinitePay Response:", body);
 
       const paymentUrl = body?.url || body?.payment_url || body?.checkout_url || null;
       const orderNsu =
@@ -101,6 +130,12 @@ class InfinitePayGateway {
         transactionNsu,
         status: "pending",
       };
+    } catch (error) {
+      console.error(
+        "[InfinitePay] createPaymentLink failed:",
+        error?.response?.data || error?.message || error
+      );
+      throw error;
     } finally {
       clearTimeout(timeout);
     }

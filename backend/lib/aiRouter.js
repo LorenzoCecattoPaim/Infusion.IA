@@ -38,7 +38,7 @@ const responseCache = new Map();
 function getClient() {
   const apiKey = process.env.AI_API_KEY;
   if (!apiKey) {
-    throw new Error("AI_API_KEY nÃ£o configurado no backend.");
+    throw new Error("AI_API_KEY nÃo configurado no backend.");
   }
   return new OpenAI({ apiKey });
 }

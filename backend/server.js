@@ -78,6 +78,10 @@ const SERVICE_ROLE_KEY = process.env.SERVICE_ROLE_KEY;
 const INFINITEPAY_HANDLE = process.env.INFINITEPAY_HANDLE;
 const INFINITEPAY_BASE_URL = process.env.INFINITEPAY_BASE_URL;
 const INFINITEPAY_WEBHOOK_SECRET = process.env.INFINITEPAY_WEBHOOK_SECRET;
+const NORMALIZED_INFINITEPAY_HANDLE = String(INFINITEPAY_HANDLE || "")
+  .trim()
+  .replace(/\$/g, "")
+  .replace(/\s+/g, "");
 
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   throw new Error("SUPABASE_URL e SERVICE_ROLE_KEY são obrigatórios");
@@ -87,6 +91,14 @@ if (!INFINITEPAY_HANDLE || !INFINITEPAY_BASE_URL || !INFINITEPAY_WEBHOOK_SECRET)
   throw new Error(
     "INFINITEPAY_HANDLE, INFINITEPAY_BASE_URL e INFINITEPAY_WEBHOOK_SECRET são obrigatórios"
   );
+}
+
+if (INFINITEPAY_BASE_URL !== "https://api.infinitepay.io") {
+  console.warn("[InfinitePay] INFINITEPAY_BASE_URL diferente do esperado:", INFINITEPAY_BASE_URL);
+}
+
+if (NORMALIZED_INFINITEPAY_HANDLE !== String(INFINITEPAY_HANDLE || "").trim()) {
+  console.warn("[InfinitePay] INFINITEPAY_HANDLE continha espaços e/ou '$' e será sanitizado.");
 }
 
 function getSupabase() {
@@ -456,7 +468,19 @@ router.get("/credits", requireAuth, async (req, res) => {
 
 router.post("/payments/create", requireAuth, async (req, res) => {
   try {
-    const { credits, amount_cents, customer } = req.body || {};
+    let body = req.body || {};
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        console.error("[PAYMENTS] create invalid JSON body:", body);
+        return sendError(res, 400, "payload inválido");
+      }
+    }
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return sendError(res, 400, "payload inválido");
+    }
+    const { credits, amount_cents, customer } = body;
     const parsedCredits = Number(credits);
     const parsedAmount = Number(amount_cents);
     if (!Number.isFinite(parsedCredits) || parsedCredits <= 0) return sendError(res, 400, "credits inválido");
@@ -1102,6 +1126,16 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, _next) => {
+  if (err?.type === "entity.parse.failed" || err instanceof SyntaxError) {
+    console.error("[INVALID JSON]", {
+      path: req.originalUrl,
+      method: req.method,
+      contentType: req.headers["content-type"] || null,
+      error: err?.message || err,
+    });
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    return res.status(400).json({ error: "payload inválido" });
+  }
   console.error("[GLOBAL ERROR]", err);
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.status(500).json({ error: "Internal server error", message: err?.message || "Unexpected error" });
