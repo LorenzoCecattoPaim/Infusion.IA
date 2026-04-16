@@ -133,14 +133,14 @@ const AI_TIMEOUT_USER_MESSAGE =
 
 const PLAN_CATALOG = {
   monthly: [
-    { id: "aprendiz_mensal", name: "Aprendiz", oldPrice: 129, price: 89, credits: 100, highlight: false },
-    { id: "avancado_mensal", name: "Avançado", oldPrice: 239, price: 149, credits: 250, highlight: true },
-    { id: "profissional_mensal", name: "Profissional", oldPrice: 499, price: 299, credits: 1000, highlight: false },
+    { id: "aprendiz_mensal", name: "Aprendiz", oldPrice: 12900, price: 8900, credits: 100, highlight: false },
+    { id: "avancado_mensal", name: "Avançado", oldPrice: 23900, price: 14900, credits: 250, highlight: true },
+    { id: "profissional_mensal", name: "Profissional", oldPrice: 49900, price: 29900, credits: 1000, highlight: false },
   ],
   annual: [
-    { id: "aprendiz_anual", name: "Aprendiz", oldPrice: 1079, price: 988, benefit: "Ganhe 1 mês grátis", highlight: false },
-    { id: "avancado_anual", name: "Avançado", oldPrice: 1799, price: 1649, benefit: "Ganhe 1 mês grátis", highlight: true },
-    { id: "profissional_anual", name: "Profissional", oldPrice: 3588, price: 2990, benefit: "Ganhe 2 meses grátis", highlight: false },
+    { id: "aprendiz_anual", name: "Aprendiz", oldPrice: 107900, price: 98800, benefit: "Ganhe 1 mês grátis", highlight: false },
+    { id: "avancado_anual", name: "Avançado", oldPrice: 179900, price: 164900, benefit: "Ganhe 1 mês grátis", highlight: true },
+    { id: "profissional_anual", name: "Profissional", oldPrice: 358800, price: 299000, benefit: "Ganhe 2 meses grátis", highlight: false },
   ],
 };
 
