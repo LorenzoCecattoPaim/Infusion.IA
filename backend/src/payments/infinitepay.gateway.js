@@ -1,5 +1,6 @@
 import "./payment.types.js";
 import { normalizePaymentStatus } from "./payment.utils.js";
+import { validateInfinitePayEnv } from "./infinitepay.config.js";
 
 class InfinitePayGateway {
   constructor({ baseUrl, handle, webhookSecret, timeoutMs = 10000 }) {
@@ -28,30 +29,14 @@ class InfinitePayGateway {
     try {
       const resolvedAppBaseUrl = appBaseUrl || process.env.APP_BASE_URL;
       const url = `${this.baseUrl}/invoices/public/checkout/links`;
-      const customerPayload = {
-        ...(customer?.name ? { name: String(customer.name).trim() } : {}),
-        ...(customer?.email ? { email: String(customer.email).trim() } : {}),
-        ...(customer?.phone_number
-          ? { phone_number: String(customer.phone_number).trim() }
-          : {}),
-      };
+      const envValidation = validateInfinitePayEnv({
+        baseUrl: this.baseUrl,
+        handle: this.handle,
+        webhookSecret: this.webhookSecret,
+      });
 
-      console.log("InfinitePay handle:", this.handle);
-
-      if (!this.baseUrl) {
-        throw new Error("INFINITEPAY_BASE_URL não definida");
-      }
-
-      if (this.baseUrl !== "https://api.infinitepay.io") {
-        console.warn("[InfinitePay] base URL diferente da produção:", this.baseUrl);
-      }
-
-      if (!this.handle) {
-        throw new Error("INFINITEPAY_HANDLE não definido");
-      }
-
-      if (/\$/.test(this.handle) || /\s/.test(this.handle)) {
-        console.warn("[InfinitePay] handle inválido após sanitização:", this.handle);
+      if (!envValidation.valid) {
+        throw new Error("Configuração inválida da InfinitePay");
       }
 
       if (!resolvedAppBaseUrl) {
@@ -59,24 +44,20 @@ class InfinitePayGateway {
       }
 
       const payload = {
-        handle: this.handle,
+        handle: envValidation.normalizedHandle,
         order_nsu: orderId,
         items: [
           {
             quantity: 1,
-            price: amountCents,
+            price: Number(amountCents),
             description: `${credits} créditos`,
           },
         ],
         webhook_url: `${resolvedAppBaseUrl}/api/webhook/infinitepay?secret=${this.webhookSecret}`,
         redirect_url: `${resolvedAppBaseUrl}/pagamento-concluido`,
-        ...(Object.keys(customerPayload).length ? { customer: customerPayload } : {}),
       };
 
-      console.log("📡 InfinitePay Request:", {
-        url,
-        payload,
-      });
+      console.log("📡 InfinitePay Request:", payload);
 
       const response = await fetch(url, {
         method: "POST",
@@ -121,6 +102,12 @@ class InfinitePayGateway {
 
       if (!paymentUrl) {
         throw new Error("Resposta inválida da InfinitePay: url não encontrada");
+      }
+
+      try {
+        new URL(paymentUrl);
+      } catch {
+        throw new Error("Resposta inválida da InfinitePay: url malformada");
       }
 
       return {

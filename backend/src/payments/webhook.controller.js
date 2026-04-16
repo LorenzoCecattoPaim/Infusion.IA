@@ -1,23 +1,6 @@
 import "./payment.types.js";
 import { verifyWebhookSignature } from "./webhook.security.js";
 
-/**
- * FIX: removido isReplay() daqui.
- *
- * PROBLEMA ORIGINAL: o replay era checado com o transactionNsu ANTES de buscar
- * o pedido no banco. Se a primeira tentativa falhava (pedido não encontrado),
- * o transactionNsu já estava registrado em webhook_events. Nas tentativas
- * seguintes, o sistema detectava "replay" e descartava — o pagamento nunca
- * era processado.
- *
- * SOLUÇÃO: a idempotência é garantida dentro de processWebhook() por meio de:
- *   1. order.credited_at (campo atômico — preenchido pela stored procedure)
- *   2. order.status === "approved" + transaction_nsu igual
- *   3. updateOrderStatus usa .neq("status", "approved") como lock otimista
- *
- * A tabela webhook_events pode continuar sendo usada para auditoria/debug,
- * mas não como gate de entrada.
- */
 function createInfinitePayWebhookHandler({
   webhookSecret,
   getSupabase,
@@ -26,16 +9,15 @@ function createInfinitePayWebhookHandler({
 }) {
   return (req, res) => {
     try {
-      // Autenticação por query token
       const secret = req.query?.secret;
       if (!secret || secret !== webhookSecret) {
+        console.warn("[WEBHOOK] secret inválido ou ausente");
         return res.status(401).json({ success: false, message: "Unauthorized" });
       }
 
       const rawBody = req.body;
       const signature = req.headers["x-signature"];
 
-      // Validação de assinatura HMAC (quando disponível)
       if (Buffer.isBuffer(rawBody) && signature) {
         const valid = verifyWebhookSignature(rawBody, signature, webhookSecret);
         if (!valid) {
@@ -48,6 +30,7 @@ function createInfinitePayWebhookHandler({
         ? JSON.parse(rawBody.toString())
         : rawBody || {};
 
+      const orderNsu = payload?.order_nsu || payload?.orderNsu || null;
       const transactionNsu =
         payload?.transaction_nsu ||
         payload?.transactionNsu ||
@@ -57,7 +40,7 @@ function createInfinitePayWebhookHandler({
       console.log(
         JSON.stringify({
           event: "webhook.infinitepay_received",
-          orderNsu: payload?.order_nsu || null,
+          orderNsu,
           invoiceSlug: payload?.invoice_slug || null,
           transactionNsu,
           hasSignature: Boolean(signature),
@@ -65,13 +48,15 @@ function createInfinitePayWebhookHandler({
       );
 
       if (!signature) {
-        console.warn("[WEBHOOK] webhook sem assinatura HMAC — apenas token de URL ativo");
+        console.warn("[WEBHOOK] webhook sem assinatura HMAC, apenas token de URL ativo");
       }
 
-      // Responde 200 imediatamente para a InfinitePay não retentar por timeout
+      if (!orderNsu && !transactionNsu) {
+        console.warn("[WEBHOOK] payload sem order_nsu e transaction_nsu");
+      }
+
       res.status(200).json({ success: true, message: null });
 
-      // Processa de forma assíncrona após responder
       setImmediate(async () => {
         try {
           const supabase = getSupabase();
@@ -92,8 +77,6 @@ function createInfinitePayWebhookHandler({
       });
     } catch (error) {
       console.error("[WEBHOOK ERROR]", error);
-      // Mesmo em erro de parse, retorna 200 para evitar retries infinitos
-      // da InfinitePay em payloads mal-formados
       return res.status(200).json({
         success: false,
         message: "Erro ao processar webhook",

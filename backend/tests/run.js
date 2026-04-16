@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { buildRequireAuth } from "../src/auth/auth.middleware.js";
+import { createPaymentCreateHandler } from "../src/payments/create-payment.controller.js";
 import { createPayment, processWebhook } from "../src/payments/payment.service.js";
 import { createInfinitePayWebhookHandler } from "../src/payments/webhook.controller.js";
 import { createFakeSupabase } from "./helpers/fake-supabase.js";
@@ -264,6 +265,46 @@ await run("webhook responde 200 rápido e processa em background", async () => {
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(processedPayload.order_nsu, "test123");
+});
+
+await run("POST /api/payments/create retorna checkoutUrl e ignora amount_cents do cliente", async () => {
+  let capturedArgs = null;
+  const handler = createPaymentCreateHandler({
+    getSupabase: () => createFakeSupabase({ store: { payment_orders: [] } }),
+    getBaseUrl: () => "https://app.example.com",
+    gatewayProvider: createGatewayStub(),
+    createPayment: async (args) => {
+      capturedArgs = args;
+      return {
+        orderId: "order-100",
+        paymentUrl: "https://checkout.example/order-100",
+        status: "pending",
+      };
+    },
+    planCatalog: {
+      monthly: [{ id: "aprendiz_mensal", credits: 100, price: 8900 }],
+    },
+    env: {
+      baseUrl: "https://api.infinitepay.io",
+      handle: "lojateste",
+      webhookSecret: "secret",
+    },
+  });
+
+  const req = {
+    body: { credits: 100, amount_cents: 1 },
+    user: { id: "user-100" },
+  };
+  const res = createResponseCollector();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.ok(res.body.checkoutUrl);
+  assert.equal(res.body.payment_url, res.body.checkoutUrl);
+  assert.equal(capturedArgs.amountCents, 8900);
+  assert.equal(capturedArgs.customer, null);
+  assert.doesNotThrow(() => new URL(res.body.checkoutUrl));
 });
 
 const failed = results.filter((result) => result.error);

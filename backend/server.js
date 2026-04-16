@@ -22,7 +22,9 @@ import {
   ensureCreditsRow,
   consumeCredits,
 } from "./src/payments/credits.service.js";
+import { createPaymentCreateHandler } from "./src/payments/create-payment.controller.js";
 import { InfinitePayGateway } from "./src/payments/infinitepay.gateway.js";
+import { validateInfinitePayEnv } from "./src/payments/infinitepay.config.js";
 import {
   createPayment,
   getPaymentStatus,
@@ -78,10 +80,6 @@ const SERVICE_ROLE_KEY = process.env.SERVICE_ROLE_KEY;
 const INFINITEPAY_HANDLE = process.env.INFINITEPAY_HANDLE;
 const INFINITEPAY_BASE_URL = process.env.INFINITEPAY_BASE_URL;
 const INFINITEPAY_WEBHOOK_SECRET = process.env.INFINITEPAY_WEBHOOK_SECRET;
-const NORMALIZED_INFINITEPAY_HANDLE = String(INFINITEPAY_HANDLE || "")
-  .trim()
-  .replace(/\$/g, "")
-  .replace(/\s+/g, "");
 
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   throw new Error("SUPABASE_URL e SERVICE_ROLE_KEY são obrigatórios");
@@ -93,13 +91,11 @@ if (!INFINITEPAY_HANDLE || !INFINITEPAY_BASE_URL || !INFINITEPAY_WEBHOOK_SECRET)
   );
 }
 
-if (INFINITEPAY_BASE_URL !== "https://api.infinitepay.io") {
-  console.warn("[InfinitePay] INFINITEPAY_BASE_URL diferente do esperado:", INFINITEPAY_BASE_URL);
-}
-
-if (NORMALIZED_INFINITEPAY_HANDLE !== String(INFINITEPAY_HANDLE || "").trim()) {
-  console.warn("[InfinitePay] INFINITEPAY_HANDLE continha espaços e/ou '$' e será sanitizado.");
-}
+validateInfinitePayEnv({
+  baseUrl: INFINITEPAY_BASE_URL,
+  handle: INFINITEPAY_HANDLE,
+  webhookSecret: INFINITEPAY_WEBHOOK_SECRET,
+});
 
 function getSupabase() {
   return createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
@@ -159,6 +155,18 @@ const infinitePayWebhookHandler = createInfinitePayWebhookHandler({
 });
 
 const requireAuth = buildRequireAuth({ getSupabase, sendError });
+const createPaymentHandler = createPaymentCreateHandler({
+  getSupabase,
+  getBaseUrl,
+  gatewayProvider: infinitePayGateway,
+  createPayment,
+  planCatalog: PLAN_CATALOG,
+  env: {
+    baseUrl: INFINITEPAY_BASE_URL,
+    handle: INFINITEPAY_HANDLE,
+    webhookSecret: INFINITEPAY_WEBHOOK_SECRET,
+  },
+});
 
 function buildPlanRows() {
   const monthly = PLAN_CATALOG.monthly.map((plan) => ({
@@ -466,46 +474,7 @@ router.get("/credits", requireAuth, async (req, res) => {
 
 /* -------- PAYMENTS -------- */
 
-router.post("/payments/create", requireAuth, async (req, res) => {
-  try {
-    let body = req.body || {};
-    if (typeof body === "string") {
-      try {
-        body = JSON.parse(body);
-      } catch {
-        console.error("[PAYMENTS] create invalid JSON body:", body);
-        return sendError(res, 400, "payload inválido");
-      }
-    }
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return sendError(res, 400, "payload inválido");
-    }
-    const { credits, amount_cents, customer } = body;
-    const parsedCredits = Number(credits);
-    const parsedAmount = Number(amount_cents);
-    if (!Number.isFinite(parsedCredits) || parsedCredits <= 0) return sendError(res, 400, "credits inválido");
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) return sendError(res, 400, "amount_cents inválido");
-    const supabase = getSupabase();
-    const baseUrl = getBaseUrl(req);
-    const result = await createPayment({
-      supabase,
-      gatewayProvider: infinitePayGateway,
-      userId: req.user.id,
-      credits: Math.trunc(parsedCredits),
-      amountCents: Math.trunc(parsedAmount),
-      customer: customer || null,
-      appBaseUrl: baseUrl,
-    });
-    return res.status(201).json({
-      payment_url: result.paymentUrl,
-      order_id: result.orderId,
-      status: result.status,
-    });
-  } catch (error) {
-    console.error("[PAYMENTS] create", error);
-    return sendError(res, 500, "Erro ao criar pagamento.");
-  }
-});
+router.post("/payments/create", requireAuth, createPaymentHandler);
 
 router.get("/payments/:id/status", requireAuth, async (req, res) => {
   try {

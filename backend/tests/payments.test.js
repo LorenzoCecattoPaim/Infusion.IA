@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createPayment, processWebhook } from "../src/payments/payment.service.js";
+import { createPaymentCreateHandler } from "../src/payments/create-payment.controller.js";
 import { createInfinitePayWebhookHandler } from "../src/payments/webhook.controller.js";
 import { createFakeSupabase } from "./helpers/fake-supabase.js";
 
@@ -244,4 +245,59 @@ test("webhook responde 200 rapido, aceita ausencia de assinatura e processa em b
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(processedPayload.order_nsu, "ord-test123");
+});
+
+test("POST /api/payments/create usa catalogo mensal e retorna checkoutUrl valido", async () => {
+  let createPaymentArgs = null;
+  const handler = createPaymentCreateHandler({
+    getSupabase: () => createFakeSupabase({ store: { payment_orders: [] } }),
+    getBaseUrl: () => "https://app.example.com",
+    gatewayProvider: createGatewayStub(),
+    createPayment: async (args) => {
+      createPaymentArgs = args;
+      return {
+        orderId: "order-100",
+        paymentUrl: "https://checkout.example/order-100",
+        status: "pending",
+      };
+    },
+    planCatalog: {
+      monthly: [
+        { id: "aprendiz_mensal", credits: 100, price: 8900 },
+      ],
+    },
+    env: {
+      baseUrl: "https://api.infinitepay.io",
+      handle: "lojateste",
+      webhookSecret: "secret",
+    },
+  });
+
+  const req = {
+    body: { credits: 100, amount_cents: 1, customer: { name: "Ignored" } },
+    user: { id: "user-100" },
+  };
+
+  const res = {
+    statusCode: null,
+    body: null,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload) {
+      this.body = payload;
+      return this;
+    },
+  };
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.ok(res.body.checkoutUrl);
+  assert.doesNotThrow(() => new URL(res.body.checkoutUrl));
+  assert.equal(res.body.payment_url, res.body.checkoutUrl);
+  assert.equal(createPaymentArgs.credits, 100);
+  assert.equal(createPaymentArgs.amountCents, 8900);
+  assert.equal(createPaymentArgs.customer, null);
 });
