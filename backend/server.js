@@ -16,6 +16,11 @@ import {
   safeParseJSON,
   validateWithAgent,
 } from "./ai.js";
+import { buildSystemPrompt } from "./lib/buildSystemPrompt.js";
+import {
+  clearBusinessContextCache,
+  getBusinessContext,
+} from "./lib/getBusinessContext.js";
 import { buildImagePrompt } from "./lib/imagePromptBuilder.js";
 import OpenAI from "openai";
 import {
@@ -290,6 +295,62 @@ async function loadBusinessProfile(supabase, userId) {
   }
 }
 
+const CRITICAL_BUSINESS_FIELDS = ["nome", "nicho", "publicoAlvo"];
+
+const BUSINESS_ROLE_BY_AGENT = {
+  AGENTE_1_CONSULTOR_MARKETING: "um consultor de marketing digital",
+  AGENTE_2_DESIGNER_LOGO: "um designer de marcas e logos",
+  AGENTE_3_GERADOR_POSTS: "um estrategista de conteudo para redes sociais",
+  AGENTE_6_GERADOR_TEXTO: "um especialista em copy e conteudo digital",
+  AGENTE_7_GERADOR_POSTS_IMAGEM: "um diretor de criacao para posts visuais",
+  AGENTE_LOGO_PROMPT_BUILDER: "um especialista em prompts para criacao de logos",
+};
+
+function resolveAgentBasePrompt(agente) {
+  switch (agente) {
+    case "AGENTE_1_CONSULTOR_MARKETING":
+      return AGENTE_1_CONSULTOR_MARKETING;
+    case "AGENTE_2_DESIGNER_LOGO":
+      return AGENTE_2_DESIGNER_LOGO;
+    case "AGENTE_3_GERADOR_POSTS":
+      return AGENTE_3_GERADOR_POSTS;
+    case "AGENTE_6_GERADOR_TEXTO":
+      return AGENTE_6_GERADOR_TEXTO;
+    case "AGENTE_7_GERADOR_POSTS_IMAGEM":
+      return AGENTE_7_GERADOR_POSTS_IMAGEM;
+    case "AGENTE_LOGO_PROMPT_BUILDER":
+      return AGENTE_LOGO_PROMPT_BUILDER;
+    default:
+      return "";
+  }
+}
+
+async function resolveBusinessPrompt({ supabase, userId, agente, fallbackProfile = null }) {
+  const context = await getBusinessContext(userId, supabase);
+
+  if (!context) {
+    return { error: "Configure seu negócio antes de usar a IA." };
+  }
+
+  const missingFields = CRITICAL_BUSINESS_FIELDS.filter((field) => !context[field]);
+  if (missingFields.length > 0) {
+    return {
+      error: `Complete o Meu negócio antes de continuar: ${missingFields.join(", ")}`,
+    };
+  }
+
+  const role = BUSINESS_ROLE_BY_AGENT[agente] || "um assistente especialista em marketing";
+  const businessPrompt = buildSystemPrompt(role, context);
+  const profile = fallbackProfile || (await loadBusinessProfile(supabase, userId));
+  const basePrompt = resolveAgentBasePrompt(agente);
+
+  return {
+    context,
+    profile,
+    systemPrompt: `${businessPrompt}\n\n${renderBusinessPrompt(basePrompt, profile, null)}`.trim(),
+  };
+}
+
 function buildPlaceholderImage(label = "Imagem") {
   const safeLabel = String(label || "Imagem").slice(0, 40);
   const svg = [
@@ -452,6 +513,7 @@ router.put("/profile", requireAuth, async (req, res) => {
       .select("*")
       .single();
     if (error) throw error;
+    clearBusinessContextCache(req.user.id);
     return sendSuccess(res, { profile: data });
   } catch (error) {
     console.error("[PROFILE PUT]", error);
@@ -720,15 +782,22 @@ router.post("/ai-chat", requireAuth, async (req, res) => {
     }
     if (!normalizedMessages.length) return sendError(res, 400, "messages required");
     const supabase = getSupabase();
-    const [creditResult, profile] = await Promise.all([
-      consumeCredits({ supabase, userId: req.user.id, amount: CREDIT_COSTS.text, reason: "ai-chat" }),
-      loadBusinessProfile(supabase, req.user.id),
-    ]);
+    const businessPrompt = await resolveBusinessPrompt({
+      supabase,
+      userId: req.user.id,
+      agente: "AGENTE_1_CONSULTOR_MARKETING",
+    });
+    if (businessPrompt.error) return sendError(res, 400, businessPrompt.error);
+    const creditResult = await consumeCredits({
+      supabase,
+      userId: req.user.id,
+      amount: CREDIT_COSTS.text,
+      reason: "ai-chat",
+    });
     if (!creditResult.ok) return sendInsufficientCredits(res, creditResult.credits);
-    const systemPrompt = renderBusinessPrompt(AGENTE_1_CONSULTOR_MARKETING, profile, null);
     const text = await executarAgente({
       agente: "AGENTE_1_CONSULTOR_MARKETING",
-      systemPrompt,
+      systemPrompt: businessPrompt.systemPrompt,
       messages: normalizedMessages,
     });
     if (stream) {
@@ -769,10 +838,14 @@ router.post("/logo-generator", requireAuth, async (req, res) => {
       normalizedMessages = [...normalizedMessages, { role: "user", content: `Crie variações com base neste prompt: ${selectedPrompt}` }];
     }
     const supabase = getSupabase();
-    const profile = await loadBusinessProfile(supabase, req.user.id);
-    const designerPrompt = renderBusinessPrompt(AGENTE_2_DESIGNER_LOGO, profile, null);
+    const designerBusinessPrompt = await resolveBusinessPrompt({
+      supabase,
+      userId: req.user.id,
+      agente: "AGENTE_2_DESIGNER_LOGO",
+    });
+    if (designerBusinessPrompt.error) return sendError(res, 400, designerBusinessPrompt.error);
     const [assistantMessage, readyCheck] = await Promise.all([
-      executarAgente({ agente: "AGENTE_2_DESIGNER_LOGO", systemPrompt: designerPrompt, messages: normalizedMessages, maxTokens: 700, temperature: 0.7, debugTag: "logo-generator" }),
+      executarAgente({ agente: "AGENTE_2_DESIGNER_LOGO", systemPrompt: designerBusinessPrompt.systemPrompt, messages: normalizedMessages, maxTokens: 700, temperature: 0.7, debugTag: "logo-generator" }),
       executarAgente({ agente: "AGENTE_LOGO_READY_CHECK", systemPrompt: AGENTE_LOGO_READY_CHECK, messages: normalizedMessages, requireJson: true, maxTokens: 180, temperature: 0.1, debugTag: "logo-ready-check" }),
     ]);
     const readiness = safeParseJSON(readyCheck, { ready: false, missing: [] });
@@ -782,10 +855,16 @@ router.post("/logo-generator", requireAuth, async (req, res) => {
     }
     const creditResult = await consumeCredits({ supabase, userId: req.user.id, amount: CREDIT_COSTS.image, reason: `logo-${action || "generator"}` });
     if (!creditResult.ok) return sendInsufficientCredits(res, creditResult.credits);
-    const promptBuilderPrompt = renderBusinessPrompt(AGENTE_LOGO_PROMPT_BUILDER, profile, null);
+    const promptBuilderContext = await resolveBusinessPrompt({
+      supabase,
+      userId: req.user.id,
+      agente: "AGENTE_LOGO_PROMPT_BUILDER",
+      fallbackProfile: designerBusinessPrompt.profile,
+    });
+    if (promptBuilderContext.error) return sendError(res, 400, promptBuilderContext.error);
     const promptResponse = await executarAgente({
       agente: "AGENTE_LOGO_PROMPT_BUILDER",
-      systemPrompt: promptBuilderPrompt,
+      systemPrompt: promptBuilderContext.systemPrompt,
       messages: normalizedMessages,
       requireJson: true,
       maxTokens: 700,
@@ -798,7 +877,7 @@ router.post("/logo-generator", requireAuth, async (req, res) => {
     const promptsToUse = prompts.slice(0, 3);
     const logos = await Promise.all(
       promptsToUse.map(async (rawPrompt, index) => {
-        const { optimizedPrompt } = buildImagePrompt({ prompt: rawPrompt, quality: "premium", businessProfile: profile, purpose: "logo" });
+        const { optimizedPrompt } = buildImagePrompt({ prompt: rawPrompt, quality: "premium", businessProfile: designerBusinessPrompt.profile, purpose: "logo" });
         const result = await generateImageWithTimeout({ model: "gpt-image-1", prompt: optimizedPrompt, size: "1024x1024" });
         const imageBase64 = result.data?.[0]?.b64_json;
         const imageUrl = imageBase64 ? `data:image/png;base64,${imageBase64}` : buildPlaceholderImage(`Logo ${index + 1}`);
@@ -829,10 +908,18 @@ router.post("/generate-text", requireAuth, async (req, res) => {
     const { tipo_conteudo, descricao, publico_alvo, tom_voz, variation, refine_notes, previous_text } = req.body || {};
     if (!tipo_conteudo || !descricao) return sendError(res, 400, "tipo_conteudo e descricao são obrigatórios");
     const supabase = getSupabase();
-    const [creditResult, profile] = await Promise.all([
-      consumeCredits({ supabase, userId: req.user.id, amount: CREDIT_COSTS.text, reason: "generate-text" }),
-      loadBusinessProfile(supabase, req.user.id),
-    ]);
+    const businessPrompt = await resolveBusinessPrompt({
+      supabase,
+      userId: req.user.id,
+      agente: "AGENTE_6_GERADOR_TEXTO",
+    });
+    if (businessPrompt.error) return sendError(res, 400, businessPrompt.error);
+    const creditResult = await consumeCredits({
+      supabase,
+      userId: req.user.id,
+      amount: CREDIT_COSTS.text,
+      reason: "generate-text",
+    });
     if (!creditResult.ok) return sendInsufficientCredits(res, creditResult.credits);
     const refinement = variation ? "Gere uma variação criativa do texto." : refine_notes ? `Refine com base nas notas: ${refine_notes}` : "";
     const basePrompt = [
@@ -843,10 +930,9 @@ router.post("/generate-text", requireAuth, async (req, res) => {
       previous_text ? `Texto anterior: ${previous_text}` : null,
       refinement || null,
     ].filter(Boolean).join("\n");
-    const systemPrompt = renderBusinessPrompt(AGENTE_6_GERADOR_TEXTO, profile, null);
     const text = await executarAgente({
       agente: "AGENTE_6_GERADOR_TEXTO",
-      systemPrompt,
+      systemPrompt: businessPrompt.systemPrompt,
       messages: [{ role: "user", content: basePrompt }],
       requireJson: true,
       temperature: 0.7,
@@ -873,10 +959,18 @@ router.post("/generate-posts", requireAuth, async (req, res) => {
     const { objetivo, tipo_conteudo, canal, brief, channels } = req.body || {};
     if (!objetivo || !tipo_conteudo) return sendError(res, 400, "objetivo e tipo_conteudo são obrigatórios");
     const supabase = getSupabase();
-    const [creditResult, profile] = await Promise.all([
-      consumeCredits({ supabase, userId: req.user.id, amount: CREDIT_COSTS.text, reason: "generate-posts" }),
-      loadBusinessProfile(supabase, req.user.id),
-    ]);
+    const businessPrompt = await resolveBusinessPrompt({
+      supabase,
+      userId: req.user.id,
+      agente: "AGENTE_3_GERADOR_POSTS",
+    });
+    if (businessPrompt.error) return sendError(res, 400, businessPrompt.error);
+    const creditResult = await consumeCredits({
+      supabase,
+      userId: req.user.id,
+      amount: CREDIT_COSTS.text,
+      reason: "generate-posts",
+    });
     if (!creditResult.ok) return sendInsufficientCredits(res, creditResult.credits);
     const payload = [
       `Objetivo: ${objetivo}`,
@@ -885,10 +979,9 @@ router.post("/generate-posts", requireAuth, async (req, res) => {
       channels?.length ? `Canais: ${channels.join(", ")}` : null,
       brief ? `Brief: ${brief}` : null,
     ].filter(Boolean).join("\n");
-    const systemPrompt = renderBusinessPrompt(AGENTE_3_GERADOR_POSTS, profile, null);
     const response = await executarAgente({
       agente: "AGENTE_3_GERADOR_POSTS",
-      systemPrompt,
+      systemPrompt: businessPrompt.systemPrompt,
       messages: [{ role: "user", content: payload }],
       requireJson: true,
       temperature: 0.7,
@@ -936,12 +1029,16 @@ router.post("/generate-post-prompt", requireAuth, async (req, res) => {
         : "Imagem do produto fornecida: Não",
     ].filter(Boolean).join("\n");
 
-    const profile = await loadBusinessProfile(supabase, req.user.id);
-    const systemPrompt = renderBusinessPrompt(AGENTE_7_GERADOR_POSTS_IMAGEM, profile, null);
+    const businessPrompt = await resolveBusinessPrompt({
+      supabase,
+      userId: req.user.id,
+      agente: "AGENTE_7_GERADOR_POSTS_IMAGEM",
+    });
+    if (businessPrompt.error) return sendError(res, 400, businessPrompt.error);
 
     const response = await executarAgente({
       agente: "AGENTE_7_GERADOR_POSTS_IMAGEM",
-      systemPrompt,
+      systemPrompt: businessPrompt.systemPrompt,
       messages: [{ role: "user", content: prompt }],
       requireJson: true,
       temperature: 0.6,

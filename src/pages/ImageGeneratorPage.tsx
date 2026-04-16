@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -163,11 +164,13 @@ export default function ImageGeneratorPage() {
               <label className="text-sm font-medium text-foreground">
                 Descreva sua imagem
               </label>
-              <textarea
+              <Textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Ex.: foto de produto minimalista, fundo claro, estilo moderno..."
-                className="w-full min-h-[120px] bg-secondary border border-border rounded-2xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none outline-none focus:border-primary/50 transition-colors"
+                className="max-h-[144px] w-full min-h-[120px] resize-none bg-secondary border border-border rounded-2xl p-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus-visible:border-primary/50 focus-visible:ring-0"
+                autoResize
+                maxRows={6}
                 maxLength={2000}
               />
               <p className="text-xs text-muted-foreground text-right">

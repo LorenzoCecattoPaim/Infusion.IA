@@ -59,7 +59,7 @@ export default function LogoGeneratorPage() {
         id: "welcome",
         role: "assistant",
         content:
-          "Ola! Sou seu designer de logo com IA. Vou criar um logo incrivel para a sua marca!\n\nPara comecar, preciso de algumas informacoes:\n\n**Qual e o nome completo da sua marca/empresa?**",
+          "Ola! Sou seu designer de logo com IA. Vou considerar automaticamente o contexto salvo em Meu negocio.\n\nMe diga agora apenas os detalhes complementares que voce quer para a identidade visual, como estilo, referencias ou cores.",
         timestamp: new Date(),
       },
     ]);
@@ -339,7 +339,9 @@ export default function LogoGeneratorPage() {
                 }
               }}
               placeholder="Responda as perguntas do designer..."
-              className="min-h-[44px] max-h-32 resize-none bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+              className="min-h-[44px] max-h-[144px] resize-none bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+              autoResize
+              maxRows={6}
               rows={1}
               disabled={loading}
             />

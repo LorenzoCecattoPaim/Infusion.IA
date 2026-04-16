@@ -2,6 +2,7 @@
 import { Send, Sparkles, TrendingUp, Target, Calendar, BarChart2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import DashboardLayout from "@/components/DashboardLayout";
 import ChatMessage from "@/components/ChatMessage";
 import { useQueryClient } from "@tanstack/react-query";
@@ -417,7 +418,7 @@ export default function ChatPage() {
         <div className="border-t border-border p-4 shrink-0">
           <div className="max-w-3xl mx-auto">
             <div className="bg-card border border-border rounded-2xl flex items-end gap-2 p-3 shadow-card focus-within:border-primary/50 focus-within:shadow-glow transition-all duration-200">
-              <textarea
+              <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -427,7 +428,9 @@ export default function ChatPage() {
                   }
                 }}
                 placeholder="Pergunte sobre estratégias de marketing, criação de conteúdo..."
-                className="flex-1 bg-transparent resize-none text-foreground placeholder:text-muted-foreground text-sm outline-none min-h-[40px] max-h-[120px] py-2 px-1"
+                className="min-h-[40px] max-h-[144px] flex-1 border-0 bg-transparent px-1 py-2 text-sm text-foreground shadow-none focus-visible:ring-0"
+                autoResize
+                maxRows={6}
                 rows={1}
                 disabled={isLoading}
               />
