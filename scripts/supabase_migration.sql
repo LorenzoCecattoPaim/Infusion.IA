@@ -118,6 +118,21 @@ create table if not exists public.payment_credit_ledger (
   created_at timestamptz default now()
 );
 
+create table if not exists public.integrations_instagram (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  ig_user_id text not null,
+  username text not null,
+  access_token text not null,
+  token_expires_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (user_id, ig_user_id)
+);
+
+create index if not exists idx_integrations_instagram_user_id
+  on public.integrations_instagram (user_id);
+
 create unique index if not exists payment_orders_transaction_nsu_key
   on public.payment_orders (transaction_nsu)
   where transaction_nsu is not null;

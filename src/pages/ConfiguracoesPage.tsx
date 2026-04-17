@@ -1,4 +1,7 @@
+import { useEffect } from "react";
 import { Instagram, Facebook, MessageCircle, BarChart2 } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
+import { useInstagramIntegration } from "@/hooks/useInstagramIntegration";
 import { toast } from "sonner";
 import PlansSection from "@/components/PlansSection";
 
@@ -34,11 +38,47 @@ const integrations = [
 
 export default function ConfiguracoesPage() {
   const { user, signOut } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const {
+    accounts,
+    connect,
+    error: instagramError,
+    isConnected,
+    isConnecting,
+    isLoading: isInstagramLoading,
+  } = useInstagramIntegration();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const instagramStatus = params.get("instagram");
+    const message = params.get("message");
+
+    if (!instagramStatus) return;
+
+    if (instagramStatus === "connected") {
+      toast.success("Instagram Business conectado com sucesso.");
+    } else if (instagramStatus === "error") {
+      toast.error(message || "Não foi possível conectar o Instagram Business.");
+    }
+
+    navigate(location.pathname, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+
+  useEffect(() => {
+    if (!instagramError) return;
+    const message =
+      instagramError instanceof Error
+        ? instagramError.message
+        : "Erro ao carregar integração do Instagram.";
+    toast.error(message);
+  }, [instagramError]);
+
+  const primaryInstagramAccount = accounts[0] ?? null;
 
   return (
     <DashboardLayout>
       <div className="p-6 space-y-8 max-w-4xl mx-auto">
-        {/* Header */}
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">
             Configurações
@@ -48,7 +88,6 @@ export default function ConfiguracoesPage() {
           </p>
         </div>
 
-        {/* Account */}
         <Card className="bg-card border-border shadow-card">
           <CardHeader className="border-b border-border">
             <CardTitle className="font-display text-foreground">
@@ -82,7 +121,6 @@ export default function ConfiguracoesPage() {
           </CardContent>
         </Card>
 
-        {/* Business data */}
         <Card className="bg-card border-border shadow-card">
           <CardHeader className="border-b border-border">
             <CardTitle className="font-display text-foreground">
@@ -102,7 +140,6 @@ export default function ConfiguracoesPage() {
 
         <PlansSection />
 
-        {/* Integrations */}
         <Card className="bg-card border-border shadow-card">
           <CardHeader className="border-b border-border">
             <CardTitle className="font-display text-foreground">
@@ -122,21 +159,43 @@ export default function ConfiguracoesPage() {
                       {item.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {item.description}
+                      {item.name === "Instagram Business" && primaryInstagramAccount
+                        ? `Conectado como @${primaryInstagramAccount.username}`
+                        : item.description}
                     </p>
                   </div>
                 </div>
-                <Switch
-                  onCheckedChange={() =>
-                    toast.info("Integração disponível em breve.")
-                  }
-                />
+                {item.name === "Instagram Business" ? (
+                  <Switch
+                    checked={isConnected}
+                    disabled={isConnecting || isInstagramLoading}
+                    onCheckedChange={(checked) => {
+                      if (!checked) {
+                        toast.info("Desconexão do Instagram ainda não está disponível.");
+                        return;
+                      }
+
+                      connect().catch((error: unknown) => {
+                        const message =
+                          error instanceof Error
+                            ? error.message
+                            : "Erro ao iniciar conexão com o Instagram.";
+                        toast.error(message);
+                      });
+                    }}
+                  />
+                ) : (
+                  <Switch
+                    onCheckedChange={() =>
+                      toast.info("Integração disponível em breve.")
+                    }
+                  />
+                )}
               </div>
             ))}
           </CardContent>
         </Card>
 
-        {/* Notifications */}
         <Card className="bg-card border-border shadow-card">
           <CardHeader className="border-b border-border">
             <CardTitle className="font-display text-foreground">
@@ -176,7 +235,6 @@ export default function ConfiguracoesPage() {
           </CardContent>
         </Card>
 
-        {/* Danger zone */}
         <Card className="bg-card border-destructive/30 shadow-card">
           <CardHeader className="border-b border-border">
             <CardTitle className="font-display text-destructive">
@@ -202,4 +260,3 @@ export default function ConfiguracoesPage() {
     </DashboardLayout>
   );
 }
-

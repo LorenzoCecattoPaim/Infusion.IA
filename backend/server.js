@@ -40,6 +40,8 @@ import {
 import { createInfinitePayWebhookHandler } from "./src/payments/webhook.controller.js";
 import { buildRequireAuth } from "./src/auth/auth.middleware.js";
 import { loadProjectEnv } from "./src/config/env.js";
+import { createInstagramController } from "./src/integrations/instagram/instagram.controller.js";
+import { createInstagramRouter } from "./src/integrations/instagram/instagram.routes.js";
 import { toFile } from "openai";
 
 loadProjectEnv();
@@ -160,6 +162,15 @@ const infinitePayWebhookHandler = createInfinitePayWebhookHandler({
 });
 
 const requireAuth = buildRequireAuth({ getSupabase, sendError });
+const instagramController = createInstagramController({
+  getSupabase,
+  sendSuccess,
+  sendError,
+});
+const instagramRouter = createInstagramRouter({
+  requireAuth,
+  controller: instagramController,
+});
 const createPaymentHandler = createPaymentCreateHandler({
   getSupabase,
   getBaseUrl,
@@ -481,6 +492,9 @@ router.get("/plans", (_req, res) =>
 
 /* -------- WEBHOOKS -------- */
 router.post("/webhook/infinitepay", infinitePayWebhookHandler);
+
+/* -------- INTEGRATIONS -------- */
+router.use("/integrations/instagram", instagramRouter);
 
 /* -------- PROFILE -------- */
 
@@ -1175,6 +1189,7 @@ const LEGACY_ROUTE_PREFIXES = [
   "/health", "/cors-test", "/plans", "/payments", "/webhook", "/profile",
   "/credits", "/dashboard-stats", "/generated-images", "/chat", "/ai-chat",
   "/generate-text", "/generate-posts", "/generate-post-prompt", "/generate-image", "/logo-generator",
+  "/integrations",
 ];
 
 app.use((req, res, next) => {
