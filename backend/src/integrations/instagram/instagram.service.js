@@ -6,7 +6,7 @@ const META_API_VERSION = "v18.0";
 const META_GRAPH_BASE_URL = `https://graph.facebook.com/${META_API_VERSION}`;
 const META_AUTH_BASE_URL = `https://www.facebook.com/${META_API_VERSION}/dialog/oauth`;
 const META_SCOPES = [
-  "instagram_basic",
+  "instagram_business_basic",
   "pages_show_list",
   "instagram_content_publish",
   "pages_read_engagement",
