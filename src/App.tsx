@@ -115,6 +115,10 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/termos" element={<Termos />} />
+              <Route path="/delete-data" element={<DeleteData />} />
+
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
