@@ -16,6 +16,9 @@ import TextGeneratorPage from "@/pages/TextGeneratorPage";
 import ConfiguracoesPage from "@/pages/ConfiguracoesPage";
 import EncodingTestPage from "@/pages/EncodingTestPage";
 import NotFound from "@/pages/NotFound";
+import Privacy from "@/pages/privacy";
+import Termos from "@/pages/termos";
+import DeleteData from "@/pages/delete-data";
 
 const queryClient = new QueryClient({
   defaultOptions: {
