@@ -8,6 +8,7 @@ const META_AUTH_BASE_URL = `https://www.facebook.com/${META_API_VERSION}/dialog/
 const META_SCOPES = [
   "pages_show_list",
   "instagram_content_publish",
+  "instagram_basic",
   "pages_read_engagement",
 ];
 
