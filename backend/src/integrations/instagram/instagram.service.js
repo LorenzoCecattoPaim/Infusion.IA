@@ -191,7 +191,7 @@ async function getInstagramAccounts(accessToken) {
   const url = new URL(`${META_GRAPH_BASE_URL}/me/accounts`);
   url.searchParams.set("fields", "instagram_business_account{id,username},access_token,name");
   url.searchParams.set("access_token", accessToken);
-
+  console.log("[Instagram] /me/accounts payload:", JSON.stringify(payload, null, 2))
   const response = await fetch(url, { method: "GET" });
   const payload = await parseMetaResponse(
     response,
