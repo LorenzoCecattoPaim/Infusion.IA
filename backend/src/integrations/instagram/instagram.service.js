@@ -105,7 +105,13 @@ function getAuthUrl(userId, returnTo = null) {
 }
 
 async function parseMetaResponse(response, fallbackMessage) {
-  const payload = await response.json().catch(() => null);
+// CORRETO - declarar antes de usar
+  const payload = await parseMetaResponse(
+    response,
+    "Não foi possível listar as contas Instagram Business vinculadas."
+  );
+
+  const accounts = Array.isArray(payload?.data) ? payload.data : [];
   if (response.ok) return payload;
 
   const metaError = payload?.error;
