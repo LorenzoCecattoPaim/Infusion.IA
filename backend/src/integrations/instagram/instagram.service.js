@@ -105,13 +105,7 @@ function getAuthUrl(userId, returnTo = null) {
 }
 
 async function parseMetaResponse(response, fallbackMessage) {
-// CORRETO - declarar antes de usar
-  const payload = await parseMetaResponse(
-    response,
-    "Não foi possível listar as contas Instagram Business vinculadas."
-  );
-
-  const accounts = Array.isArray(payload?.data) ? payload.data : [];
+  const payload = await response.json().catch(() => null);
   if (response.ok) return payload;
 
   const metaError = payload?.error;
@@ -196,12 +190,14 @@ async function getInstagramAccounts(accessToken) {
   const url = new URL(`${META_GRAPH_BASE_URL}/me/accounts`);
   url.searchParams.set("fields", "instagram_business_account{id,username},access_token,name");
   url.searchParams.set("access_token", accessToken);
-  console.log("[Instagram] /me/accounts payload:", JSON.stringify(payload, null, 2))
+
   const response = await fetch(url, { method: "GET" });
   const payload = await parseMetaResponse(
     response,
     "Não foi possível listar as contas Instagram Business vinculadas."
   );
+
+  console.log("[Instagram] /me/accounts payload:", JSON.stringify(payload, null, 2));
 
   const accounts = Array.isArray(payload?.data) ? payload.data : [];
 
