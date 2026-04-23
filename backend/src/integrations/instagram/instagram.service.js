@@ -9,6 +9,7 @@ const META_SCOPES = [
   "pages_show_list",
   "instagram_content_publish",
   "pages_read_engagement",
+  "business_management",
 ];
 
 /**
