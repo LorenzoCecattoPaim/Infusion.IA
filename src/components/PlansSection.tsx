@@ -49,11 +49,6 @@ function PlanCard({ plan, currentPlan }: { plan: Plan; currentPlan?: string }) {
     >
       {(plan.highlight || activePlan) && (
         <div className="absolute left-5 right-5 -top-3 flex flex-wrap items-center gap-2">
-          {plan.highlight && (
-            <span className="rounded-full gradient-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground shadow-glow">
-              Mais popular
-            </span>
-          )}
           {activePlan && (
             <span className="rounded-full border border-primary/20 bg-background px-3 py-1 text-[10px] font-semibold text-primary">
               Plano atual
